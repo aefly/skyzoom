@@ -1,0 +1,84 @@
+[center][size=4][img]https://i.imgur.com/WneRNBB.png[/img][/size][/center]
+[center][/center]
+[center][size=4][img]https://i.imgur.com/oDIJh3u.png[/img][/size]
+
+[/center]
+[size=4][img]https://i.imgur.com/F763T2e.png[/img][/size]
+
+[size=4]SkyZoom adds a smooth, hold-to-zoom first-person camera to Skyrim. Hold a key or mouse button on your keyboard, or a button on your gamepad, and the camera's field of view eases in smoothly — your hands and equipped weapon zoom right along with the world, not just the background. Release it and everything eases back out to normal. Clean, controllable zoom whenever you want a closer look.[/size]
+
+[size=4]It's a native [b]SKSE[/b] plugin built on CommonLibSSE-NG, so the core zoom works entirely at the engine level. An optional in-game MCM menu (if SkyUI is installed) is also available for configuring it without touching any files.[/size]
+
+[size=4][img]https://i.imgur.com/aWwOIA1.png[/img][/size]
+
+[list]
+[*][size=4][b]Smooth ease in/out[/b] — a smoothstep transition with zero velocity at both ends.[/size][/*]
+[*][size=4][b]Keyboard/mouse hotkey[/b] — bind the zoom to any keyboard key or mouse button.[/size][/*]
+[*][size=4][b]Gamepad support[/b] — bind the zoom to a gamepad button independently of your keyboard/mouse bind.[/size][/*]
+[*][size=4][b]Viewmodel included[/b] — your first-person hands and weapon zoom together with the world, not just the background.[/size][/*]
+[*][size=4][b]Fully configurable[/b] — target zoom FOV and ease speed are both adjustable, no recompiling needed.[/size][/*]
+[*][size=4][b]Optional MCM menu[/b] — configure everything in-game via SkyUI's Mod Configuration Menu, changes apply instantly.[/size][/*]
+[/list]
+
+[size=4][img]https://i.imgur.com/KtIQFDT.png[/img][/size]
+
+
+[list]
+[*][size=4][url=https://skse.silverlock.org/][b]SKSE64[/b] (Skyrim Script Extender)[/url][/size][/*]
+[*][size=4][url=https://www.nexusmods.com/skyrimspecialedition/mods/32444][b]Address Library for SKSE Plugins[/b][/url][/size][/*]
+[*][size=4][url=https://www.nexusmods.com/skyrimspecialedition/mods/12604][b]SkyUI[/b][/url] (optional — only needed for the in-game MCM menu)[/size][/*]
+[/list]
+
+
+[size=4][img]https://i.imgur.com/ejHwxrn.png[/img][/size]
+
+
+[list=1]
+[*][size=4]Install SKSE and Address Library for SKSE Plugins (see Requirements above). Optionally install SkyUI for the MCM menu.[/size][/*]
+[*][size=4]Extract [b]SkyZoom.dll[/b] and [b]SkyZoom.ini[/b] into [i]Data\SKSE\Plugins[/i] in your Skyrim install folder.[/size][/*]
+[*][size=4]For the MCM menu: also extract [b]SkyZoom.esp[/b] into [i]Data[/i], and [b]SkyZoom_Native.pex[/b]/[b]SkyZoom_MCM.pex[/b] into [i]Data\Scripts[/i], then enable [b]SkyZoom.esp[/b] in your load order.[/size][/*]
+[*][size=4]Launch the game via [i]skse64_loader.exe[/i].[/size][/*]
+[/list]
+
+
+[size=4][img]https://i.imgur.com/dsYOD8c.png[/img][/size]
+
+[size=4]
+Hold the configured hotkey (default: [b]Mouse Button 4 / M4[/b] on keyboard/mouse, [b]D-Pad Left[/b] on gamepad) in first-person view to smoothly zoom in. Release it to return to your normal FOV.[/size]
+
+
+[size=4][img]https://i.imgur.com/dqQ0cl4.png[/img][/size]
+
+[size=4]
+If SkyUI is installed, open the [b]SkyZoom[/b] page in the MCM menu to configure everything in-game — changes apply instantly.
+
+Otherwise, everything is controlled through [b]SkyZoom.ini[/b]:[/size]
+
+[list]
+[*][size=4][b]Hotkey[/b] (default [b][i]5[/i][/b], Mouse Button 4 / M4) — virtual-key code of the hold-to-zoom key.[/size][/*]
+[*][size=4][b]GamepadButton[/b] (default [b][i]4[/i][/b], D-Pad Left) — XInput button bitmask that also activates hold-to-zoom. Set to [i]0[/i] to disable.[/size][/*]
+[*][size=4][b]ZoomFOV[/b] (default [i][b]60.0[/b][/i]) — FOV in degrees while the hotkey is held.[/size][/*]
+[*][size=4][b]SmoothSpeed[/b] (default [i][b]8.0[/b][/i]) — ease-in/ease-out speed for the zoom transition. Higher = snappier.[/size][/*]
+[/list]
+[size=4]
+Edit the file with any text editor and restart the game to apply your changes.[/size]
+
+
+[size=4][img]https://i.imgur.com/DWIRPVE.png[/img][/size]
+
+[size=4]
+Built and tested against Skyrim [b]1.6.1170.0[/b].
+
+SkyZoom writes directly to the game's own first-person camera FOV values each frame — it doesn't hook or replace the camera itself, so it should sit cleanly alongside most other mods. The one exception is another mod that also writes those same values every frame (another zoom or camera mod), which can visually fight with SkyZoom.
+
+As with any SKSE plugin, it depends on Address Library being updated for your game version after a Skyrim update.[/size]
+
+
+[size=4][img]https://i.imgur.com/68T1w4l.png[/img][/size]
+
+
+[size=4]Thanks to the [url=https://skse.silverlock.org/]SKSE[/url] team, [url=https://github.com/CharmedBaryon/CommonLibSSE-NG]CharmedBaryon/CommonLibSSE-NG[/url], and meh321 for [url=https://www.nexusmods.com/skyrimspecialedition/mods/32444]Address Library[/url] — none of this works without them. SkyZoom is a Skyrim port of my own [url=https://www.nexusmods.com/starfield/mods/18003]StarZoom[/url] for Starfield. And thanks to everyone testing SkyZoom and sending feedback.[/size]
+
+[size=3]Source code: [url=https://github.com/aefly/skyzoom]GitHub[/url][/size]
+[center][/center]
+[center][size=2][img]https://i.imgur.com/oDIJh3u.png[/img][/size][/center]

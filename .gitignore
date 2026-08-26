@@ -1,0 +1,6 @@
+build/
+.xmake/
+vsxmake*/
+*.zip
+.xwin-cache/
+.clangd
