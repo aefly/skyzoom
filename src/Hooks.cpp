@@ -2,6 +2,12 @@
 
 #include "FOVController.h"
 
+// Some RE/* headers pull in the real <d3d11.h> (and therefore <windows.h>)
+// after REX/W32/BASE.h has already been parsed, so its "no real Windows.h"
+// guard doesn't catch it. That leaves PAGE_READWRITE as an object-like
+// macro, shadowing REX::W32::PAGE_READWRITE - undef it first.
+#undef PAGE_READWRITE
+
 namespace Hooks {
 namespace {
 using Present_t = std::int32_t (*)(REX::W32::IDXGISwapChain *, std::uint32_t,
@@ -35,8 +41,9 @@ std::int32_t hkPresent(REX::W32::IDXGISwapChain *a_swapChain,
 }
 
 REX::W32::IDXGISwapChain *GetGameSwapChain() {
-  auto *renderer = RE::BSGraphics::Renderer::GetRendererData();
-  return renderer ? renderer->renderWindows[0].swapChain : nullptr;
+  auto *renderer = RE::BSGraphics::Renderer::GetSingleton();
+  return renderer ? renderer->GetRuntimeData().renderWindows[0].swapChain
+                  : nullptr;
 }
 
 // No timeout: a heavily modded load order can take a while to reach the

@@ -1,8 +1,13 @@
+-- VR disabled: SkyZoom is SE/AE only, and pulling in openvr.h transitively
+-- drags in the real <Windows.h> (breaking REX::W32::MAX_PATH, which expects
+-- to be the only definition of that name).
+set_config("skyrim_vr", false)
+
 includes("lib/commonlibsse-ng")
 
 set_project("skyzoom")
-set_version("1.0.0")
-set_license("MIT")
+set_version("1.1.0")
+set_license("GPL-3.0-or-later")
 set_languages("c++23")
 set_warnings("allextra")
 

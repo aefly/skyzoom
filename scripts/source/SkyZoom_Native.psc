@@ -19,4 +19,14 @@ Function SetZoomFOV(float afov) Global Native
 float Function GetSmoothSpeed() Global Native
 Function SetSmoothSpeed(float aspeed) Global Native
 
+; 0 = first person only, 1 = third person only, 2 = both.
+int Function GetViewMode() Global Native
+Function SetViewMode(int aviewMode) Global Native
+
+bool Function GetScaleMouseSensitivity() Global Native
+Function SetScaleMouseSensitivity(bool ascale) Global Native
+
+float Function GetSensitivityExponent() Global Native
+Function SetSensitivityExponent(float aexponent) Global Native
+
 string Function GetPluginVersion() Global Native

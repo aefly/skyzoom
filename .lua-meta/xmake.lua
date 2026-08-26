@@ -34,6 +34,8 @@ function set_default(...) end
 
 function set_description(...) end
 
+function set_config(...) end
+
 function set_pcxxheader(...) end
 
 function add_rules(...) end

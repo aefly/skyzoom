@@ -1,5 +1,13 @@
 #include "Config.h"
 
+// Some RE/* headers pull in the real <d3d11.h> (and therefore <windows.h>)
+// after REX/W32/BASE.h has already been parsed, so its "no real Windows.h"
+// guard doesn't catch it. That leaves MAX_PATH as an object-like macro,
+// shadowing REX::W32::MAX_PATH - undef it so the qualified name resolves.
+#ifdef MAX_PATH
+#undef MAX_PATH
+#endif
+
 namespace Config {
 namespace {
 // CommonLibSSE-NG has no REX::FModule (CommonLibSF-only), so resolve this
@@ -42,7 +50,30 @@ void WriteIni(const std::filesystem::path &a_path) {
          "# Exponential smoothing rate for the zoom-in/out animation.\n"
          "# Higher = snappier, lower = more gradual.\n"
          "SmoothSpeed="
-      << SmoothSpeed << "\n";
+      << SmoothSpeed
+      << "\n"
+         "\n"
+         "# Which view(s) the hotkey zooms in. 0 = first person only, 1 = "
+         "third person only, 2 = both (default).\n"
+         "ViewMode="
+      << ActiveViewMode
+      << "\n"
+         "\n"
+         "# Whether to scale mouse sensitivity down while zoomed, so aim "
+         "doesn't feel twitchy at a narrower FOV (1 = on, 0 = off).\n"
+         "ScaleMouseSensitivity="
+      << (ScaleMouseSensitivity ? 1 : 0)
+      << "\n"
+         "\n"
+         "# How aggressively mouse sensitivity is cut while zoomed (only "
+         "used\n"
+         "# while ScaleMouseSensitivity=1 above). 1.0 cuts it in direct "
+         "proportion\n"
+         "# to the FOV ratio; higher values cut it more aggressively at "
+         "moderate\n"
+         "# zoom without changing the no-zoom or fully-zoomed endpoints.\n"
+         "SensitivityExponent="
+      << SensitivityExponent << "\n";
 }
 
 std::string Trim(std::string a_str) {
@@ -88,20 +119,35 @@ void Load() {
       ZoomFOV = std::clamp(std::strtof(val.c_str(), nullptr), 1.0f, 170.0f);
     } else if (key == "SmoothSpeed") {
       SmoothSpeed = std::clamp(std::strtof(val.c_str(), nullptr), 0.1f, 60.0f);
+    } else if (key == "ViewMode") {
+      ActiveViewMode = std::clamp(
+          static_cast<std::uint32_t>(std::strtoul(val.c_str(), nullptr, 10)),
+          static_cast<std::uint32_t>(kFirstPersonOnly),
+          static_cast<std::uint32_t>(kBoth));
+    } else if (key == "ScaleMouseSensitivity") {
+      ScaleMouseSensitivity = std::strtoul(val.c_str(), nullptr, 10) != 0;
+    } else if (key == "SensitivityExponent") {
+      SensitivityExponent =
+          std::clamp(std::strtof(val.c_str(), nullptr), 0.1f, 10.0f);
     }
   }
 
   SKSE::log::info(
       "SkyZoom config: Hotkey=0x{:X} GamepadButton=0x{:X} ZoomFOV={:.1f} "
-      "SmoothSpeed={:.1f}",
-      Hotkey, GamepadButton, ZoomFOV, SmoothSpeed);
+      "SmoothSpeed={:.1f} ViewMode={} ScaleMouseSensitivity={} "
+      "SensitivityExponent={:.2f}",
+      Hotkey, GamepadButton, ZoomFOV, SmoothSpeed, ActiveViewMode,
+      ScaleMouseSensitivity, SensitivityExponent);
 }
 
 void Save() {
   WriteIni(GetIniPath());
 
-  SKSE::log::info("SkyZoom config saved: Hotkey=0x{:X} GamepadButton=0x{:X} "
-                  "ZoomFOV={:.1f} SmoothSpeed={:.1f}",
-                  Hotkey, GamepadButton, ZoomFOV, SmoothSpeed);
+  SKSE::log::info(
+      "SkyZoom config saved: Hotkey=0x{:X} GamepadButton=0x{:X} "
+      "ZoomFOV={:.1f} SmoothSpeed={:.1f} ViewMode={} ScaleMouseSensitivity={} "
+      "SensitivityExponent={:.2f}",
+      Hotkey, GamepadButton, ZoomFOV, SmoothSpeed, ActiveViewMode,
+      ScaleMouseSensitivity, SensitivityExponent);
 }
 } // namespace Config

@@ -8,6 +8,16 @@
 
 #include <array>
 
+// Some RE/* headers pull in the real <d3d11.h> (and therefore <windows.h>)
+// after REX/W32/BASE.h has already been parsed, so its "no real Windows.h"
+// guard doesn't catch it. That leaves these as object-like macros, shadowing
+// the REX::W32:: qualified names below - undef them first.
+#undef VK_LBUTTON
+#undef VK_RBUTTON
+#undef VK_MBUTTON
+#undef VK_XBUTTON1
+#undef VK_XBUTTON2
+
 // MCM's AddKeyMapOption reports DirectX scan codes, not the Windows
 // virtual-key codes Config::Hotkey and Input.cpp's GetAsyncKeyState use -
 // every value crossing that boundary goes through this conversion.
@@ -104,6 +114,35 @@ void SetSmoothSpeed(RE::StaticFunctionTag *, float a_speed) {
   Config::Save();
 }
 
+std::int32_t GetViewMode(RE::StaticFunctionTag *) {
+  return static_cast<std::int32_t>(Config::ActiveViewMode);
+}
+
+void SetViewMode(RE::StaticFunctionTag *, std::int32_t a_viewMode) {
+  Config::ActiveViewMode = static_cast<std::uint32_t>(
+      std::clamp(a_viewMode, static_cast<std::int32_t>(Config::kFirstPersonOnly),
+                 static_cast<std::int32_t>(Config::kBoth)));
+  Config::Save();
+}
+
+bool GetScaleMouseSensitivity(RE::StaticFunctionTag *) {
+  return Config::ScaleMouseSensitivity;
+}
+
+void SetScaleMouseSensitivity(RE::StaticFunctionTag *, bool a_scale) {
+  Config::ScaleMouseSensitivity = a_scale;
+  Config::Save();
+}
+
+float GetSensitivityExponent(RE::StaticFunctionTag *) {
+  return Config::SensitivityExponent;
+}
+
+void SetSensitivityExponent(RE::StaticFunctionTag *, float a_exponent) {
+  Config::SensitivityExponent = std::clamp(a_exponent, 0.1f, 10.0f);
+  Config::Save();
+}
+
 // Read from the plugin declaration rather than hardcoded, so it can't drift
 // out of sync with the actual build.
 std::string GetPluginVersion(RE::StaticFunctionTag *) {
@@ -125,6 +164,16 @@ bool RegisterFunctions(RE::BSScript::IVirtualMachine *a_vm) {
   a_vm->RegisterFunction("SetZoomFOV", kClassName, SetZoomFOV);
   a_vm->RegisterFunction("GetSmoothSpeed", kClassName, GetSmoothSpeed);
   a_vm->RegisterFunction("SetSmoothSpeed", kClassName, SetSmoothSpeed);
+  a_vm->RegisterFunction("GetViewMode", kClassName, GetViewMode);
+  a_vm->RegisterFunction("SetViewMode", kClassName, SetViewMode);
+  a_vm->RegisterFunction("GetScaleMouseSensitivity", kClassName,
+                         GetScaleMouseSensitivity);
+  a_vm->RegisterFunction("SetScaleMouseSensitivity", kClassName,
+                         SetScaleMouseSensitivity);
+  a_vm->RegisterFunction("GetSensitivityExponent", kClassName,
+                         GetSensitivityExponent);
+  a_vm->RegisterFunction("SetSensitivityExponent", kClassName,
+                         SetSensitivityExponent);
   a_vm->RegisterFunction("GetPluginVersion", kClassName, GetPluginVersion);
 
   return true;

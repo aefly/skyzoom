@@ -9,6 +9,11 @@
 // on our render-thread Present hook - import GetAsyncKeyState instead.
 REX_W32_IMPORT(std::int16_t, GetAsyncKeyState, std::int32_t);
 
+// GetAsyncKeyState/XInputGetState both read global device state regardless
+// of which window has focus - without this check, the hotkey would still
+// trigger the zoom while alt-tabbed away from the game.
+REX_W32_IMPORT(REX::W32::HWND, GetForegroundWindow);
+
 extern "C" std::uint32_t XInputGetState(std::uint32_t a_userIndex,
                                         REX::W32::XINPUT_STATE *a_state);
 
@@ -16,6 +21,15 @@ namespace Input {
 namespace {
 std::int16_t GetAsyncKeyState(std::int32_t a_key) noexcept {
   return ::W32_IMPL_GetAsyncKeyState(a_key);
+}
+
+bool IsGameWindowFocused() noexcept {
+  auto *renderer = RE::BSGraphics::Renderer::GetSingleton();
+  if (!renderer) {
+    return true; // renderer not up yet; nothing to compare against
+  }
+  const auto gameHwnd = renderer->GetRuntimeData().renderWindows[0].hWnd;
+  return gameHwnd != nullptr && ::W32_IMPL_GetForegroundWindow() == gameHwnd;
 }
 
 bool IsGamepadButtonDown(std::uint32_t a_buttonMask) noexcept {
@@ -57,6 +71,10 @@ bool IsGamepadButtonDown(std::uint32_t a_buttonMask) noexcept {
 } // namespace
 
 bool IsHotkeyDown() noexcept {
+  if (!IsGameWindowFocused()) {
+    return false;
+  }
+
   if ((GetAsyncKeyState(static_cast<std::int32_t>(Config::Hotkey)) & 0x8000) !=
       0) {
     return true;
