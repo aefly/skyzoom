@@ -23,6 +23,12 @@ Function SetSmoothSpeed(float aspeed) Global Native
 int Function GetViewMode() Global Native
 Function SetViewMode(int aviewMode) Global Native
 
+bool Function GetRequireWeaponSheathed() Global Native
+Function SetRequireWeaponSheathed(bool arequire) Global Native
+
+bool Function GetAllowZoomDuringDialogue() Global Native
+Function SetAllowZoomDuringDialogue(bool aallow) Global Native
+
 bool Function GetScaleMouseSensitivity() Global Native
 Function SetScaleMouseSensitivity(bool ascale) Global Native
 
