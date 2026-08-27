@@ -73,6 +73,11 @@ std::uint32_t ThreadProc(void *) noexcept {
 } // namespace
 
 void Install() {
-  REX::W32::CreateThread(nullptr, 0, &ThreadProc, nullptr, 0, nullptr);
+  // Detached thread; close the handle immediately rather than leak it.
+  auto *thread =
+      REX::W32::CreateThread(nullptr, 0, &ThreadProc, nullptr, 0, nullptr);
+  if (thread) {
+    REX::W32::CloseHandle(thread);
+  }
 }
 } // namespace Hooks
