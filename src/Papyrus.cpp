@@ -63,7 +63,7 @@ std::uint32_t VirtualKeyToMcmCode(std::uint32_t a_vk) noexcept {
 }
 
 std::int32_t GetHotkey(RE::StaticFunctionTag *) {
-  return static_cast<std::int32_t>(VirtualKeyToMcmCode(Config::Hotkey));
+  return static_cast<std::int32_t>(VirtualKeyToMcmCode(Config::Hotkey.load()));
 }
 
 void SetHotkey(RE::StaticFunctionTag *, std::int32_t a_mcmCode) {
@@ -85,11 +85,11 @@ bool IsGamepadKeycode(RE::StaticFunctionTag *, std::int32_t a_keycode) {
 }
 
 std::int32_t GetGamepadButton(RE::StaticFunctionTag *) {
-  if (Config::GamepadButton == 0) {
+  const auto mask = Config::GamepadButton.load();
+  if (mask == 0) {
     return -1;
   }
-  return static_cast<std::int32_t>(
-      SKSE::InputMap::GamepadMaskToKeycode(Config::GamepadButton));
+  return static_cast<std::int32_t>(SKSE::InputMap::GamepadMaskToKeycode(mask));
 }
 
 void SetGamepadButton(RE::StaticFunctionTag *, std::int32_t a_keycode) {
@@ -100,14 +100,16 @@ void SetGamepadButton(RE::StaticFunctionTag *, std::int32_t a_keycode) {
   Config::Save();
 }
 
-float GetZoomFOV(RE::StaticFunctionTag *) { return Config::ZoomFOV; }
+float GetZoomFOV(RE::StaticFunctionTag *) { return Config::ZoomFOV.load(); }
 
 void SetZoomFOV(RE::StaticFunctionTag *, float a_fov) {
   Config::ZoomFOV = std::clamp(a_fov, 1.0f, 170.0f);
   Config::Save();
 }
 
-float GetSmoothSpeed(RE::StaticFunctionTag *) { return Config::SmoothSpeed; }
+float GetSmoothSpeed(RE::StaticFunctionTag *) {
+  return Config::SmoothSpeed.load();
+}
 
 void SetSmoothSpeed(RE::StaticFunctionTag *, float a_speed) {
   Config::SmoothSpeed = std::clamp(a_speed, 0.1f, 60.0f);
@@ -115,18 +117,36 @@ void SetSmoothSpeed(RE::StaticFunctionTag *, float a_speed) {
 }
 
 std::int32_t GetViewMode(RE::StaticFunctionTag *) {
-  return static_cast<std::int32_t>(Config::ActiveViewMode);
+  return static_cast<std::int32_t>(Config::ActiveViewMode.load());
 }
 
 void SetViewMode(RE::StaticFunctionTag *, std::int32_t a_viewMode) {
-  Config::ActiveViewMode = static_cast<std::uint32_t>(
-      std::clamp(a_viewMode, static_cast<std::int32_t>(Config::kFirstPersonOnly),
-                 static_cast<std::int32_t>(Config::kBoth)));
+  Config::ActiveViewMode = static_cast<std::uint32_t>(std::clamp(
+      a_viewMode, static_cast<std::int32_t>(Config::kFirstPersonOnly),
+      static_cast<std::int32_t>(Config::kBoth)));
+  Config::Save();
+}
+
+bool GetRequireWeaponSheathed(RE::StaticFunctionTag *) {
+  return Config::RequireWeaponSheathed.load();
+}
+
+void SetRequireWeaponSheathed(RE::StaticFunctionTag *, bool a_require) {
+  Config::RequireWeaponSheathed = a_require;
+  Config::Save();
+}
+
+bool GetAllowZoomDuringDialogue(RE::StaticFunctionTag *) {
+  return Config::AllowZoomDuringDialogue.load();
+}
+
+void SetAllowZoomDuringDialogue(RE::StaticFunctionTag *, bool a_allow) {
+  Config::AllowZoomDuringDialogue = a_allow;
   Config::Save();
 }
 
 bool GetScaleMouseSensitivity(RE::StaticFunctionTag *) {
-  return Config::ScaleMouseSensitivity;
+  return Config::ScaleMouseSensitivity.load();
 }
 
 void SetScaleMouseSensitivity(RE::StaticFunctionTag *, bool a_scale) {
@@ -135,7 +155,7 @@ void SetScaleMouseSensitivity(RE::StaticFunctionTag *, bool a_scale) {
 }
 
 float GetSensitivityExponent(RE::StaticFunctionTag *) {
-  return Config::SensitivityExponent;
+  return Config::SensitivityExponent.load();
 }
 
 void SetSensitivityExponent(RE::StaticFunctionTag *, float a_exponent) {
@@ -166,6 +186,14 @@ bool RegisterFunctions(RE::BSScript::IVirtualMachine *a_vm) {
   a_vm->RegisterFunction("SetSmoothSpeed", kClassName, SetSmoothSpeed);
   a_vm->RegisterFunction("GetViewMode", kClassName, GetViewMode);
   a_vm->RegisterFunction("SetViewMode", kClassName, SetViewMode);
+  a_vm->RegisterFunction("GetRequireWeaponSheathed", kClassName,
+                         GetRequireWeaponSheathed);
+  a_vm->RegisterFunction("SetRequireWeaponSheathed", kClassName,
+                         SetRequireWeaponSheathed);
+  a_vm->RegisterFunction("GetAllowZoomDuringDialogue", kClassName,
+                         GetAllowZoomDuringDialogue);
+  a_vm->RegisterFunction("SetAllowZoomDuringDialogue", kClassName,
+                         SetAllowZoomDuringDialogue);
   a_vm->RegisterFunction("GetScaleMouseSensitivity", kClassName,
                          GetScaleMouseSensitivity);
   a_vm->RegisterFunction("SetScaleMouseSensitivity", kClassName,
