@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "Input.h"
 
+#include <array>
 #include <cmath>
 
 // Skyrim has no re-readable ini Setting for first-person FOV, so this writes
@@ -67,6 +68,30 @@ RE::Setting *GetMouseSensitivitySetting() noexcept {
 
   return cached;
 }
+
+// Menus that take over input without tripping GameIsPaused() or
+// ControlMap::IsMovementControlsEnabled() (e.g. Crafting does neither).
+constexpr std::array<std::string_view, 19> kBlockingMenuNames = {
+    RE::BookMenu::MENU_NAME,        RE::CraftingMenu::MENU_NAME,
+    RE::ContainerMenu::MENU_NAME,   RE::BarterMenu::MENU_NAME,
+    RE::TweenMenu::MENU_NAME,       RE::FavoritesMenu::MENU_NAME,
+    RE::GiftMenu::MENU_NAME,        RE::LevelUpMenu::MENU_NAME,
+    RE::LockpickingMenu::MENU_NAME, RE::RaceSexMenu::MENU_NAME,
+    RE::SleepWaitMenu::MENU_NAME,   RE::TrainingMenu::MENU_NAME,
+    RE::MapMenu::MENU_NAME,         RE::MagicMenu::MENU_NAME,
+    RE::InventoryMenu::MENU_NAME,   RE::JournalMenu::MENU_NAME,
+    RE::StatsMenu::MENU_NAME,       RE::Console::MENU_NAME,
+    RE::MessageBoxMenu::MENU_NAME,
+};
+
+bool IsBlockingMenuOpen(RE::UI *a_ui) noexcept {
+  for (const auto &name : kBlockingMenuNames) {
+    if (a_ui->IsMenuOpen(name)) {
+      return true;
+    }
+  }
+  return false;
+}
 } // namespace
 
 void Update() {
@@ -82,16 +107,50 @@ void Update() {
   const bool inThirdPerson = playerCamera && playerCamera->currentState &&
                              playerCamera->IsInThirdPerson();
   const bool inZoomableView =
-      (Config::ActiveViewMode != Config::kThirdPersonOnly && inFirstPerson) ||
-      (Config::ActiveViewMode != Config::kFirstPersonOnly && inThirdPerson);
-  const bool hotkeyDown = Input::IsHotkeyDown();
+      (Config::ActiveViewMode.load() != Config::kThirdPersonOnly &&
+       inFirstPerson) ||
+      (Config::ActiveViewMode.load() != Config::kFirstPersonOnly &&
+       inThirdPerson);
+
+  // A blocking menu is up - three checks OR'd together, since no single one
+  // covers every menu (see kBlockingMenuNames above). Dialogue trips these
+  // too but is excluded and handled separately below.
+  auto *ui = RE::UI::GetSingleton();
+  const bool dialogueOpen = ui && ui->IsMenuOpen(RE::DialogueMenu::MENU_NAME);
+  auto *controlMap = RE::ControlMap::GetSingleton();
+  const bool controlsDisabled =
+      controlMap && !controlMap->IsMovementControlsEnabled();
+  const bool gamePaused = ui && ui->GameIsPaused();
+  const bool namedMenuOpen = ui && IsBlockingMenuOpen(ui);
+  const bool menuOpen =
+      !dialogueOpen && (controlsDisabled || gamePaused || namedMenuOpen);
+
+  // Own MCM toggle (some players want to zoom mid-conversation), and eases
+  // out via hotkeyDown below instead of the hard reset, since unlike the
+  // menus above it doesn't cover the 3D view.
+  const bool dialogueZoomAllowed =
+      dialogueOpen && Config::AllowZoomDuringDialogue.load();
+  const bool dialogueBlocksZoom =
+      dialogueOpen && !Config::AllowZoomDuringDialogue.load();
+
+  // Recon-tool intent, except during an allowed conversation where weapon
+  // state shouldn't matter.
+  auto *player = RE::PlayerCharacter::GetSingleton();
+  auto *actorState = player ? player->AsActorState() : nullptr;
+  const bool weaponBlocksZoom = !dialogueZoomAllowed &&
+                                Config::RequireWeaponSheathed.load() &&
+                                actorState && actorState->IsWeaponDrawn();
+
+  const bool hotkeyDown =
+      !weaponBlocksZoom && !dialogueBlocksZoom && Input::IsHotkeyDown();
   auto *sensSetting = GetMouseSensitivitySetting();
 
-  if (!playerCamera || !inZoomableView) {
+  if (!playerCamera || !inZoomableView || menuOpen) {
     // Reset here, not just on the press/release edge below, so leaving
-    // first/third person mid-zoom doesn't leave worldFOV stuck at an
-    // in-between value the next time one of those is entered. Other camera
-    // states (horse, dragon, vanity, kill moves, ...) are left alone.
+    // first/third person mid-zoom (or opening a menu) doesn't leave
+    // worldFOV stuck at an in-between value the next time one of those is
+    // entered. Other camera states (horse, dragon, vanity, kill moves, ...)
+    // are left alone.
     if (g_active && playerCamera) {
       playerCamera->worldFOV = g_baseFOVDeg;
       playerCamera->firstPersonFOV = g_baseFirstPersonFOVDeg;
@@ -121,9 +180,9 @@ void Update() {
         g_active ? (g_fromFirstPersonFOVDeg +
                     (g_toFirstPersonFOVDeg - g_fromFirstPersonFOVDeg) * t)
                  : g_baseFirstPersonFOVDeg;
-    g_toFOVDeg = hotkeyDown ? Config::ZoomFOV : g_baseFOVDeg;
+    g_toFOVDeg = hotkeyDown ? Config::ZoomFOV.load() : g_baseFOVDeg;
     g_toFirstPersonFOVDeg =
-        hotkeyDown ? Config::ZoomFOV : g_baseFirstPersonFOVDeg;
+        hotkeyDown ? Config::ZoomFOV.load() : g_baseFirstPersonFOVDeg;
     g_transitionT = 0.0f;
     g_active = true;
     g_hotkeyWasDown = hotkeyDown;
@@ -133,7 +192,8 @@ void Update() {
     return;
   }
 
-  const float duration = std::clamp(3.0f / Config::SmoothSpeed, 0.05f, 5.0f);
+  const float duration =
+      std::clamp(3.0f / Config::SmoothSpeed.load(), 0.05f, 5.0f);
   g_transitionT = std::clamp(g_transitionT + dt / duration, 0.0f, 1.0f);
   const float t = SmoothStep(g_transitionT);
 
@@ -148,10 +208,12 @@ void Update() {
   // Config::ScaleMouseSensitivity only here (not on the sampling/restore
   // above/below) so toggling it off mid-zoom still restores whatever it had
   // last scaled to, instead of leaving it stuck.
-  if (sensSetting && Config::ScaleMouseSensitivity && g_baseFOVDeg > 0.0f) {
+  if (sensSetting && Config::ScaleMouseSensitivity.load() &&
+      g_baseFOVDeg > 0.0f) {
     const float fovRatio =
         std::clamp(playerCamera->worldFOV / g_baseFOVDeg, 0.0f, 1.0f);
-    const float sensScale = std::pow(fovRatio, Config::SensitivityExponent);
+    const float sensScale =
+        std::pow(fovRatio, Config::SensitivityExponent.load());
     sensSetting->SetFloat(g_baseSensitivity * sensScale);
   }
 
