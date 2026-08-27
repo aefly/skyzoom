@@ -75,15 +75,17 @@ applied immediately.
 Otherwise, edit `SkyZoom.ini` next to the DLL (created with defaults on
 first launch if missing) and restart the game to apply changes:
 
-| Key                     | Default | Description                                                                                      |
-| ----------------------- | ------- | ------------------------------------------------------------------------------------------------ |
-| `Hotkey`                | `5`     | Virtual-key code of the hold-to-zoom key (`5` = Mouse Button 4 / M4)                             |
-| `GamepadButton`         | `4`     | XInput button bitmask that also holds-to-zoom (`4` = D-Pad Left; `0` disables)                   |
-| `ZoomFOV`               | `60.0`  | FOV in degrees while the hotkey is held                                                          |
-| `SmoothSpeed`           | `8.0`   | Ease-in/ease-out speed for the zoom transition (higher = snappier)                               |
-| `ViewMode`              | `2`     | Which view(s) the hotkey zooms in (`0` = first person only, `1` = third person only, `2` = both) |
-| `ScaleMouseSensitivity` | `1`     | Scale mouse sensitivity down while zoomed (`1` = on, `0` = off)                                  |
-| `SensitivityExponent`   | `2.5`   | How aggressively sensitivity is cut while zoomed (higher = more aggressive at moderate zoom)     |
+| Key                       | Default | Description                                                                                                    |
+| ------------------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
+| `Hotkey`                  | `5`     | Virtual-key code of the hold-to-zoom key (`5` = Mouse Button 4 / M4)                                           |
+| `GamepadButton`           | `4`     | XInput button bitmask that also holds-to-zoom (`4` = D-Pad Left; `0` disables)                                 |
+| `ZoomFOV`                 | `60.0`  | FOV in degrees while the hotkey is held                                                                        |
+| `SmoothSpeed`             | `8.0`   | Ease-in/ease-out speed for the zoom transition (higher = snappier)                                             |
+| `ViewMode`                | `2`     | Which view(s) the hotkey zooms in (`0` = first person only, `1` = third person only, `2` = both)               |
+| `RequireWeaponSheathed`   | `1`     | Only zoom while not in a ready/fighting stance, weapon or H2H (`1` = on, `0` = zoom works from any stance too) |
+| `AllowZoomDuringDialogue` | `0`     | Let the hotkey zoom while talking to an NPC, even from a ready stance (`1` = on, `0` = off, default)           |
+| `ScaleMouseSensitivity`   | `1`     | Scale mouse sensitivity down while zoomed (`1` = on, `0` = off)                                                |
+| `SensitivityExponent`     | `2.5`   | How aggressively sensitivity is cut while zoomed (higher = more aggressive at moderate zoom)                   |
 
 ## Building
 
@@ -96,8 +98,12 @@ first launch if missing) and restart the game to apply changes:
 ### Dependencies
 
 `lib/commonlibsse-ng` is a git submodule, tracking
-[alandtse/CommonLibSSE-NG][commonlibsse-ng], which supports both the
-Skyrim 1.6.1170 and 1.7.99 runtimes. Fetch it with:
+[alandtse/CommonLibSSE-NG][commonlibsse-ng]. SkyZoom is built for the SE and
+AE. Confirmed working on 1.6.1170, 1.7.99, and 1.5.97; any other SE/AE version
+should work as long as [Address Library][address-library] has a matching file for
+it.
+
+Fetch the submodule with:
 
 ```sh
 git submodule update --init --recursive
@@ -124,7 +130,13 @@ Requirements:
 - `PapyrusCompiler.exe`, shipped with the Creation Kit
   (`<Skyrim install>\Papyrus Compiler\PapyrusCompiler.exe`).
 - The base game's Papyrus source, under
-  `<Skyrim install>\Data\Scripts\Source\Source\Scripts`.
+  `<Skyrim install>\Data\Scripts\Source\Source\Scripts`. The Creation Kit
+  install drops this as a zip, `<Skyrim install>\Data\Scripts.zip` - it
+  does **not** extract it automatically, so unzip it yourself first (its
+  `Source\Scripts\` folder is what goes under `Source\Source\Scripts`
+  above). Without this, compiling fails on the very first script that
+  extends anything, since even `Quest` (the root of `SKI_ConfigBase`'s own
+  extends chain) needs to be resolvable from source.
 - The [SkyUI SDK][skyui-sdk] (a separate download from the SkyUI Nexus
   page), for `SKI_ConfigBase.psc` - `SkyZoom_MCM.psc` extends it, and the
   compiler needs the source, not SkyUI's shipped `.pex`, for anything it
@@ -189,8 +201,15 @@ A background thread polls
 — until it's non-null, then vtable-patches that swapchain's `Present` for a
 per-frame callback. Each frame, while the player is in first or third person
 and the hotkey (or gamepad button) is held or the transition is still easing
-out, `FOVController::Update()` writes smoothstep-interpolated values
-straight into `RE::PlayerCamera::worldFOV` and `firstPersonFOV` (the latter
+out - and no blocking menu (inventory, magic, crafting, book, container,
+barter, ...) is open, and (unless `AllowZoomDuringDialogue` is on) the
+Dialogue Menu isn't open either - it's excluded from the general menu check
+and gets its own MCM toggle instead, since unlike the others it doesn't
+cover the 3D view - and (if `RequireWeaponSheathed` is on, and not
+overridden by an allowed conversation) the player isn't in a ready/fighting
+stance (weapon, spell, or empty-handed H2H all count) -
+`FOVController::Update()` writes smoothstep-interpolated values straight
+into `RE::PlayerCamera::worldFOV` and `firstPersonFOV` (the latter
 only matters in first person, but is harmless to keep in sync in third
 person too), so the scene and the first-person viewmodel (arms/weapon) zoom
 together as one picture. If `ScaleMouseSensitivity` is on, the same
