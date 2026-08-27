@@ -75,11 +75,11 @@ bool IsHotkeyDown() noexcept {
     return false;
   }
 
-  if ((GetAsyncKeyState(static_cast<std::int32_t>(Config::Hotkey)) & 0x8000) !=
-      0) {
+  if ((GetAsyncKeyState(static_cast<std::int32_t>(Config::Hotkey.load())) &
+       0x8000) != 0) {
     return true;
   }
 
-  return IsGamepadButtonDown(Config::GamepadButton);
+  return IsGamepadButtonDown(Config::GamepadButton.load());
 }
 } // namespace Input
