@@ -32,37 +32,53 @@ void WriteIni(const std::filesystem::path &a_path) {
          "# Virtual-key code of the hold-to-zoom hotkey.\n"
          "# Default is 5 (0x05), Mouse Button 4 / M4.\n"
          "Hotkey="
-      << Hotkey
+      << Hotkey.load()
       << "\n"
          "\n"
          "# XInput gamepad button bitmask that also holds-to-zoom (0 = "
          "disabled).\n"
          "# Default is 4 (0x0004), D-Pad Left.\n"
          "GamepadButton="
-      << GamepadButton
+      << GamepadButton.load()
       << "\n"
          "\n"
          "# FOV in degrees while the hotkey is held.\n"
          "ZoomFOV="
-      << ZoomFOV
+      << ZoomFOV.load()
       << "\n"
          "\n"
          "# Exponential smoothing rate for the zoom-in/out animation.\n"
          "# Higher = snappier, lower = more gradual.\n"
          "SmoothSpeed="
-      << SmoothSpeed
+      << SmoothSpeed.load()
       << "\n"
          "\n"
          "# Which view(s) the hotkey zooms in. 0 = first person only, 1 = "
          "third person only, 2 = both (default).\n"
          "ViewMode="
-      << ActiveViewMode
+      << ActiveViewMode.load()
+      << "\n"
+         "\n"
+         "# Whether the hotkey only zooms while not in a ready/fighting "
+         "stance - a drawn weapon or spell counts, and so does empty-handed "
+         "H2H ready stance (1 = on, default; 0 = zoom works from any stance "
+         "too).\n"
+         "RequireWeaponSheathed="
+      << (RequireWeaponSheathed.load() ? 1 : 0)
+      << "\n"
+         "\n"
+         "# Whether the hotkey still zooms while talking to an NPC, even "
+         "from a ready stance (overrides RequireWeaponSheathed for that "
+         "conversation) (1 = on; 0 = off, default, since conversations "
+         "don't pause the game).\n"
+         "AllowZoomDuringDialogue="
+      << (AllowZoomDuringDialogue.load() ? 1 : 0)
       << "\n"
          "\n"
          "# Whether to scale mouse sensitivity down while zoomed, so aim "
          "doesn't feel twitchy at a narrower FOV (1 = on, 0 = off).\n"
          "ScaleMouseSensitivity="
-      << (ScaleMouseSensitivity ? 1 : 0)
+      << (ScaleMouseSensitivity.load() ? 1 : 0)
       << "\n"
          "\n"
          "# How aggressively mouse sensitivity is cut while zoomed (only "
@@ -73,7 +89,7 @@ void WriteIni(const std::filesystem::path &a_path) {
          "moderate\n"
          "# zoom without changing the no-zoom or fully-zoomed endpoints.\n"
          "SensitivityExponent="
-      << SensitivityExponent << "\n";
+      << SensitivityExponent.load() << "\n";
 }
 
 std::string Trim(std::string a_str) {
@@ -124,6 +140,10 @@ void Load() {
           static_cast<std::uint32_t>(std::strtoul(val.c_str(), nullptr, 10)),
           static_cast<std::uint32_t>(kFirstPersonOnly),
           static_cast<std::uint32_t>(kBoth));
+    } else if (key == "RequireWeaponSheathed") {
+      RequireWeaponSheathed = std::strtoul(val.c_str(), nullptr, 10) != 0;
+    } else if (key == "AllowZoomDuringDialogue") {
+      AllowZoomDuringDialogue = std::strtoul(val.c_str(), nullptr, 10) != 0;
     } else if (key == "ScaleMouseSensitivity") {
       ScaleMouseSensitivity = std::strtoul(val.c_str(), nullptr, 10) != 0;
     } else if (key == "SensitivityExponent") {
@@ -134,20 +154,25 @@ void Load() {
 
   SKSE::log::info(
       "SkyZoom config: Hotkey=0x{:X} GamepadButton=0x{:X} ZoomFOV={:.1f} "
-      "SmoothSpeed={:.1f} ViewMode={} ScaleMouseSensitivity={} "
+      "SmoothSpeed={:.1f} ViewMode={} RequireWeaponSheathed={} "
+      "AllowZoomDuringDialogue={} ScaleMouseSensitivity={} "
       "SensitivityExponent={:.2f}",
-      Hotkey, GamepadButton, ZoomFOV, SmoothSpeed, ActiveViewMode,
-      ScaleMouseSensitivity, SensitivityExponent);
+      Hotkey.load(), GamepadButton.load(), ZoomFOV.load(), SmoothSpeed.load(),
+      ActiveViewMode.load(), RequireWeaponSheathed.load(),
+      AllowZoomDuringDialogue.load(), ScaleMouseSensitivity.load(),
+      SensitivityExponent.load());
 }
 
 void Save() {
   WriteIni(GetIniPath());
 
-  SKSE::log::info(
-      "SkyZoom config saved: Hotkey=0x{:X} GamepadButton=0x{:X} "
-      "ZoomFOV={:.1f} SmoothSpeed={:.1f} ViewMode={} ScaleMouseSensitivity={} "
-      "SensitivityExponent={:.2f}",
-      Hotkey, GamepadButton, ZoomFOV, SmoothSpeed, ActiveViewMode,
-      ScaleMouseSensitivity, SensitivityExponent);
+  SKSE::log::info("SkyZoom config saved: Hotkey=0x{:X} GamepadButton=0x{:X} "
+                  "ZoomFOV={:.1f} SmoothSpeed={:.1f} ViewMode={} "
+                  "RequireWeaponSheathed={} AllowZoomDuringDialogue={} "
+                  "ScaleMouseSensitivity={} SensitivityExponent={:.2f}",
+                  Hotkey.load(), GamepadButton.load(), ZoomFOV.load(),
+                  SmoothSpeed.load(), ActiveViewMode.load(),
+                  RequireWeaponSheathed.load(), AllowZoomDuringDialogue.load(),
+                  ScaleMouseSensitivity.load(), SensitivityExponent.load());
 }
 } // namespace Config
