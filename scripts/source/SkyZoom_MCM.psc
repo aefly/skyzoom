@@ -5,6 +5,8 @@ int _oidGamepadButton
 int _oidZoomFOV
 int _oidSmoothSpeed
 int _oidViewMode
+int _oidRequireWeaponSheathed
+int _oidAllowZoomDuringDialogue
 int _oidScaleSensitivity
 int _oidSensitivityExponent
 
@@ -30,11 +32,14 @@ Event OnPageReset(string a_page)
     _oidZoomFOV = AddSliderOption("Zoom FOV", SkyZoom_Native.GetZoomFOV(), "{0} deg")
     _oidSmoothSpeed = AddSliderOption("Smooth Speed", SkyZoom_Native.GetSmoothSpeed(), "{2}")
     _oidViewMode = AddMenuOption("Active View", _viewModeOptions[SkyZoom_Native.GetViewMode()])
+    _oidRequireWeaponSheathed = AddToggleOption("Require Weapon Sheathed", SkyZoom_Native.GetRequireWeaponSheathed())
+    _oidAllowZoomDuringDialogue = AddToggleOption("Allow Zoom During Dialogue", SkyZoom_Native.GetAllowZoomDuringDialogue())
 
     AddHeaderOption("Mouse Sensitivity")
     _oidScaleSensitivity = AddToggleOption("Scale Sensitivity While Zoomed", SkyZoom_Native.GetScaleMouseSensitivity())
     _oidSensitivityExponent = AddSliderOption("Sensitivity Curve", SkyZoom_Native.GetSensitivityExponent(), "{2}")
 
+    SetCursorPosition(1) ; force About into the right column regardless of how full the left one is
     AddHeaderOption("About")
     AddTextOption("Plugin Version", SkyZoom_Native.GetPluginVersion(), OPTION_FLAG_DISABLED)
 EndEvent
@@ -50,6 +55,10 @@ Event OnOptionHighlight(int a_option)
         SetInfoText("How quickly the zoom eases in and out. Higher is snappier, lower is more gradual.")
     elseif a_option == _oidViewMode
         SetInfoText("Which view(s) the hotkey zooms in.")
+    elseif a_option == _oidRequireWeaponSheathed
+        SetInfoText("Only zoom while not in a ready/fighting stance - includes empty-handed H2H, not just a drawn weapon or spell. Turn off to zoom from any stance.")
+    elseif a_option == _oidAllowZoomDuringDialogue
+        SetInfoText("Let the hotkey zoom in while talking to an NPC, even from a ready stance. Off by default, since conversations don't pause the game.")
     elseif a_option == _oidScaleSensitivity
         SetInfoText("Scales mouse sensitivity down while zoomed, so aim doesn't feel twitchy at a narrower FOV.")
     elseif a_option == _oidSensitivityExponent
@@ -112,10 +121,18 @@ Event OnOptionSliderAccept(int a_option, float a_value)
 EndEvent
 
 Event OnOptionSelect(int a_option)
-    if a_option == _oidScaleSensitivity
-        bool newValue = !SkyZoom_Native.GetScaleMouseSensitivity()
-        SkyZoom_Native.SetScaleMouseSensitivity(newValue)
-        SetToggleOptionValue(a_option, newValue)
+    if a_option == _oidRequireWeaponSheathed
+        bool requireSheathed = !SkyZoom_Native.GetRequireWeaponSheathed()
+        SkyZoom_Native.SetRequireWeaponSheathed(requireSheathed)
+        SetToggleOptionValue(a_option, requireSheathed)
+    elseif a_option == _oidAllowZoomDuringDialogue
+        bool allowDuringDialogue = !SkyZoom_Native.GetAllowZoomDuringDialogue()
+        SkyZoom_Native.SetAllowZoomDuringDialogue(allowDuringDialogue)
+        SetToggleOptionValue(a_option, allowDuringDialogue)
+    elseif a_option == _oidScaleSensitivity
+        bool scaleSensitivity = !SkyZoom_Native.GetScaleMouseSensitivity()
+        SkyZoom_Native.SetScaleMouseSensitivity(scaleSensitivity)
+        SetToggleOptionValue(a_option, scaleSensitivity)
     endif
 EndEvent
 
