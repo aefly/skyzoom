@@ -23,6 +23,17 @@ float g_toFirstPersonFOVDeg = 90.0f;
 float g_transitionT = 1.0f;
 float g_baseSensitivity = 0.0f;
 
+// Same from/to/t transition as above, in 0..1 instead of degrees - for
+// GetActiveZoomWeight() below, so a compat patch can blend rather than
+// substitute (see FOVController.h).
+float g_fromWeight = 0.0f;
+float g_toWeight = 0.0f;
+
+// Atomic: read cross-DLL by a compat patch's own hook (CompatAPI.cpp).
+std::atomic<bool> g_exportedActive{false};
+std::atomic<float> g_exportedWeight{0.0f};
+std::atomic<float> g_exportedTargetFOV{90.0f};
+
 // Smoothstep: zero velocity at both ends, so the transition never jolts.
 float SmoothStep(float a_t) noexcept {
   const float t = std::clamp(a_t, 0.0f, 1.0f);
@@ -160,6 +171,7 @@ void Update() {
     }
     g_active = false;
     g_hotkeyWasDown = false;
+    g_exportedActive.store(false, std::memory_order_relaxed);
     return;
   }
 
@@ -183,12 +195,16 @@ void Update() {
     g_toFOVDeg = hotkeyDown ? Config::ZoomFOV.load() : g_baseFOVDeg;
     g_toFirstPersonFOVDeg =
         hotkeyDown ? Config::ZoomFOV.load() : g_baseFirstPersonFOVDeg;
+    g_fromWeight =
+        g_active ? (g_fromWeight + (g_toWeight - g_fromWeight) * t) : 0.0f;
+    g_toWeight = hotkeyDown ? 1.0f : 0.0f;
     g_transitionT = 0.0f;
     g_active = true;
     g_hotkeyWasDown = hotkeyDown;
   }
 
   if (!g_active) {
+    g_exportedActive.store(false, std::memory_order_relaxed);
     return;
   }
 
@@ -201,6 +217,11 @@ void Update() {
   playerCamera->firstPersonFOV =
       g_fromFirstPersonFOVDeg +
       (g_toFirstPersonFOVDeg - g_fromFirstPersonFOVDeg) * t;
+
+  const float weight = g_fromWeight + (g_toWeight - g_fromWeight) * t;
+  g_exportedWeight.store(weight, std::memory_order_relaxed);
+  g_exportedTargetFOV.store(Config::ZoomFOV.load(), std::memory_order_relaxed);
+  g_exportedActive.store(true, std::memory_order_relaxed);
 
   // Scales sensitivity by the FOV ratio (raised to Config::SensitivityExponent
   // - see its declaration for why), so it rides the same eased transition as
@@ -225,6 +246,16 @@ void Update() {
       sensSetting->SetFloat(g_baseSensitivity);
     }
     g_active = false;
+    g_exportedActive.store(false, std::memory_order_relaxed);
   }
+}
+
+bool GetActiveZoomWeight(float &a_outWeight, float &a_outTargetFOV) noexcept {
+  if (!g_exportedActive.load(std::memory_order_relaxed)) {
+    return false;
+  }
+  a_outWeight = g_exportedWeight.load(std::memory_order_relaxed);
+  a_outTargetFOV = g_exportedTargetFOV.load(std::memory_order_relaxed);
+  return true;
 }
 } // namespace FOVController
