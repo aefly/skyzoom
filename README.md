@@ -12,6 +12,7 @@
   <a href="#installation">Installation</a> •
   <a href="#usage">Usage</a> •
   <a href="#configuration">Configuration</a> •
+  <a href="#compatibility">Compatibility</a> •
   <a href="#building">Building</a> •
   <a href="#license">License</a>
 </p>
@@ -87,6 +88,11 @@ first launch if missing) and restart the game to apply changes:
 | `ScaleMouseSensitivity`   | `1`     | Scale mouse sensitivity down while zoomed (`1` = on, `0` = off)                                                |
 | `SensitivityExponent`     | `2.5`   | How aggressively sensitivity is cut while zoomed (higher = more aggressive at moderate zoom)                   |
 
+## Compatibility
+
+See [Compatibility](./patch/README.md) for SkyZoom's optional,
+separately-versioned compatibility patches.
+
 ## Building
 
 ### Requirements
@@ -114,8 +120,6 @@ git submodule update --init --recursive
 ```sh
 xmake build
 ```
-
-This produces `SkyZoom.dll` under `build/windows/x64/...`.
 
 ### Building the MCM menu
 
@@ -179,6 +183,7 @@ Visual Studio IDE.
 │   ├── Hooks.h / .cpp            D3D11 swapchain Present hook install
 │   ├── Input.h / .cpp            Keyboard + mouse + XInput hotkey polling
 │   ├── FOVController.h / .cpp    Per-frame FOV transition + worldFOV write
+│   ├── CompatAPI.h / .cpp        Exported zoom-weight query for compat patch
 │   └── Papyrus.h / .cpp          Native function bridge for the MCM menu
 ├── scripts/source/
 │   ├── SkyZoom_Native.psc        Papyrus declarations for the native bridge
@@ -186,6 +191,8 @@ Visual Studio IDE.
 ├── dist/
 │   ├── SkyZoom.ini                Default config, shipped alongside the DLL
 │   └── SkyZoom.esp                Quest hosting the MCM menu (see below)
+├── patch/                        Compatibility patch index, see its README
+│   └── improved-camera/README.md What/why/how - code lives on its branch
 └── lib/commonlibsse-ng/          CommonLibSSE-NG (git submodule)
 ```
 
