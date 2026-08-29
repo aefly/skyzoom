@@ -41,6 +41,9 @@ SKSEPluginLoad(const SKSE::LoadInterface *a_skse) {
   SKSE::Init(a_skse);
   InitializeLogging();
 
+  if (auto *decl = SKSE::PluginDeclaration::GetSingleton()) {
+    SKSE::log::info("SkyZoom v{}", decl->GetVersion().string("."));
+  }
   SKSE::log::info("SkyZoom loaded");
 
   Config::Load();
