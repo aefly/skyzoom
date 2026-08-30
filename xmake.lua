@@ -6,7 +6,7 @@ set_config("skyrim_vr", false)
 includes("lib/commonlibsse-ng")
 
 set_project("skyzoom")
-set_version("1.2.1")
+set_version("1.2.2")
 set_license("GPL-3.0-or-later")
 set_languages("c++23")
 set_warnings("allextra")
