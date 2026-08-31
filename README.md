@@ -204,8 +204,8 @@ Visual Studio IDE.
 ├── dist/
 │   ├── SkyZoom.ini                Default config, shipped alongside the DLL
 │   └── SkyZoom.esp                Quest hosting the MCM menu (see below)
-├── patch/                        Compatibility patch index, see its README
-│   └── improved-camera/README.md What/why/how - code lives on its branch
+├── patch/README.md               Compatibility patch index - code for each
+│                                  one lives on its own `patch/<name>` branch
 └── lib/commonlibsse-ng/          CommonLibSSE-NG (git submodule)
 ```
 
