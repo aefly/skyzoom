@@ -42,6 +42,14 @@ void WriteIni(const std::filesystem::path &a_path) {
       << GamepadButton.load()
       << "\n"
          "\n"
+         "# Whether the hotkey (keyboard/mouse or gamepad above) toggles the "
+         "zoom on/off instead of requiring it held down - press once to "
+         "zoom in, press again to zoom out (1 = on; 0 = off, default, "
+         "hold-to-zoom).\n"
+         "ToggleMode="
+      << (ToggleMode.load() ? 1 : 0)
+      << "\n"
+         "\n"
          "# FOV in degrees while the hotkey is held.\n"
          "ZoomFOV="
       << ZoomFOV.load()
@@ -53,17 +61,19 @@ void WriteIni(const std::filesystem::path &a_path) {
       << SmoothSpeed.load()
       << "\n"
          "\n"
-         "# Whether scrolling the mouse wheel (or gamepad LB/RB) "
-         "while the hotkey is held adjusts the zoom live, between "
+         "# Whether scrolling the mouse wheel (or holding LiveZoomBoostButton "
+         "below) while the hotkey is held adjusts the zoom live, between "
          "MinZoomFOV and ZoomFOV below (1 = on, default; 0 = off). ZoomFOV "
          "is the loose end of that range - releasing the hotkey is still "
-         "the only way back to the unzoomed FOV.\n"
+         "the only way back to the unzoomed FOV; releasing the boost button "
+         "alone also snaps back to ZoomFOV, unlike the wheel, which "
+         "persists.\n"
          "EnableScrollZoomAdjust="
       << (EnableScrollZoomAdjust.load() ? 1 : 0)
       << "\n"
          "\n"
-         "# Tightest FOV reachable by scrolling in while "
-         "EnableScrollZoomAdjust=1 above.\n"
+         "# Tightest FOV reachable via the wheel or LiveZoomBoostButton "
+         "below, while EnableScrollZoomAdjust=1 above.\n"
          "MinZoomFOV="
       << MinZoomFOV.load()
       << "\n"
@@ -73,6 +83,15 @@ void WriteIni(const std::filesystem::path &a_path) {
          "on; 0 = off, default).\n"
          "ScrollUsesSmoothSpeed="
       << (ScrollUsesSmoothSpeed.load() ? 1 : 0)
+      << "\n"
+         "\n"
+         "# XInput gamepad button bitmask for the live zoom boost above "
+         "(0 = disabled). Default is 128 (0x0080), Right Stick Click (R3) "
+         "- deliberately not LB/RB, since Shout and most transform/power "
+         "binds charge-and-release on those and can misfire on release if "
+         "used here instead.\n"
+         "LiveZoomBoostButton="
+      << LiveZoomBoostButton.load()
       << "\n"
          "\n"
          "# Which view(s) the hotkey zooms in. 0 = first person only, 1 = "
@@ -153,6 +172,8 @@ void Load() {
     } else if (key == "GamepadButton") {
       GamepadButton =
           static_cast<std::uint32_t>(std::strtoul(val.c_str(), nullptr, 10));
+    } else if (key == "ToggleMode") {
+      ToggleMode = std::strtoul(val.c_str(), nullptr, 10) != 0;
     } else if (key == "ZoomFOV") {
       ZoomFOV = std::clamp(std::strtof(val.c_str(), nullptr), 1.0f, 170.0f);
     } else if (key == "SmoothSpeed") {
@@ -163,6 +184,9 @@ void Load() {
       MinZoomFOV = std::clamp(std::strtof(val.c_str(), nullptr), 1.0f, 170.0f);
     } else if (key == "ScrollUsesSmoothSpeed") {
       ScrollUsesSmoothSpeed = std::strtoul(val.c_str(), nullptr, 10) != 0;
+    } else if (key == "LiveZoomBoostButton") {
+      LiveZoomBoostButton =
+          static_cast<std::uint32_t>(std::strtoul(val.c_str(), nullptr, 10));
     } else if (key == "ViewMode") {
       ActiveViewMode = std::clamp(
           static_cast<std::uint32_t>(std::strtoul(val.c_str(), nullptr, 10)),
@@ -181,30 +205,33 @@ void Load() {
   }
 
   SKSE::log::info(
-      "SkyZoom config: Hotkey=0x{:X} GamepadButton=0x{:X} ZoomFOV={:.1f} "
-      "SmoothSpeed={:.1f} EnableScrollZoomAdjust={} MinZoomFOV={:.1f} "
-      "ScrollUsesSmoothSpeed={} ViewMode={} RequireWeaponSheathed={} "
-      "AllowZoomDuringDialogue={} ScaleMouseSensitivity={} "
-      "SensitivityExponent={:.2f}",
-      Hotkey.load(), GamepadButton.load(), ZoomFOV.load(), SmoothSpeed.load(),
-      EnableScrollZoomAdjust.load(), MinZoomFOV.load(),
-      ScrollUsesSmoothSpeed.load(), ActiveViewMode.load(),
-      RequireWeaponSheathed.load(), AllowZoomDuringDialogue.load(),
-      ScaleMouseSensitivity.load(), SensitivityExponent.load());
+      "SkyZoom config: Hotkey=0x{:X} GamepadButton=0x{:X} ToggleMode={} "
+      "ZoomFOV={:.1f} SmoothSpeed={:.1f} EnableScrollZoomAdjust={} "
+      "MinZoomFOV={:.1f} ScrollUsesSmoothSpeed={} LiveZoomBoostButton=0x{:X} "
+      "ViewMode={} RequireWeaponSheathed={} AllowZoomDuringDialogue={} "
+      "ScaleMouseSensitivity={} SensitivityExponent={:.2f}",
+      Hotkey.load(), GamepadButton.load(), ToggleMode.load(), ZoomFOV.load(),
+      SmoothSpeed.load(), EnableScrollZoomAdjust.load(), MinZoomFOV.load(),
+      ScrollUsesSmoothSpeed.load(), LiveZoomBoostButton.load(),
+      ActiveViewMode.load(), RequireWeaponSheathed.load(),
+      AllowZoomDuringDialogue.load(), ScaleMouseSensitivity.load(),
+      SensitivityExponent.load());
 }
 
 void Save() {
   WriteIni(GetIniPath());
 
   SKSE::log::info("SkyZoom config saved: Hotkey=0x{:X} GamepadButton=0x{:X} "
-                  "ZoomFOV={:.1f} SmoothSpeed={:.1f} "
+                  "ToggleMode={} ZoomFOV={:.1f} SmoothSpeed={:.1f} "
                   "EnableScrollZoomAdjust={} MinZoomFOV={:.1f} "
-                  "ScrollUsesSmoothSpeed={} ViewMode={} "
-                  "RequireWeaponSheathed={} AllowZoomDuringDialogue={} "
-                  "ScaleMouseSensitivity={} SensitivityExponent={:.2f}",
-                  Hotkey.load(), GamepadButton.load(), ZoomFOV.load(),
-                  SmoothSpeed.load(), EnableScrollZoomAdjust.load(),
-                  MinZoomFOV.load(), ScrollUsesSmoothSpeed.load(),
+                  "ScrollUsesSmoothSpeed={} LiveZoomBoostButton=0x{:X} "
+                  "ViewMode={} RequireWeaponSheathed={} "
+                  "AllowZoomDuringDialogue={} ScaleMouseSensitivity={} "
+                  "SensitivityExponent={:.2f}",
+                  Hotkey.load(), GamepadButton.load(), ToggleMode.load(),
+                  ZoomFOV.load(), SmoothSpeed.load(),
+                  EnableScrollZoomAdjust.load(), MinZoomFOV.load(),
+                  ScrollUsesSmoothSpeed.load(), LiveZoomBoostButton.load(),
                   ActiveViewMode.load(), RequireWeaponSheathed.load(),
                   AllowZoomDuringDialogue.load(), ScaleMouseSensitivity.load(),
                   SensitivityExponent.load());
