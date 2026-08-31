@@ -62,6 +62,29 @@ std::uint32_t VirtualKeyToMcmCode(std::uint32_t a_vk) noexcept {
   return VirtualKeyToScanCode(a_vk);
 }
 
+// SKSE's GamepadKeycodeToMask()/GamepadMaskToKeycode() don't round-trip
+// LT/RT (see Config::kSyntheticLeftTrigger) - these wrap them to use our
+// two dedicated bits instead.
+std::uint32_t GamepadKeycodeToMask(std::uint32_t a_keycode) noexcept {
+  if (a_keycode == SKSE::InputMap::kGamepadButtonOffset_LT) {
+    return Config::kSyntheticLeftTrigger;
+  }
+  if (a_keycode == SKSE::InputMap::kGamepadButtonOffset_RT) {
+    return Config::kSyntheticRightTrigger;
+  }
+  return SKSE::InputMap::GamepadKeycodeToMask(a_keycode);
+}
+
+std::uint32_t GamepadMaskToKeycode(std::uint32_t a_mask) noexcept {
+  if (a_mask == Config::kSyntheticLeftTrigger) {
+    return SKSE::InputMap::kGamepadButtonOffset_LT;
+  }
+  if (a_mask == Config::kSyntheticRightTrigger) {
+    return SKSE::InputMap::kGamepadButtonOffset_RT;
+  }
+  return SKSE::InputMap::GamepadMaskToKeycode(a_mask);
+}
+
 std::int32_t GetHotkey(RE::StaticFunctionTag *) {
   return static_cast<std::int32_t>(VirtualKeyToMcmCode(Config::Hotkey.load()));
 }
@@ -89,14 +112,37 @@ std::int32_t GetGamepadButton(RE::StaticFunctionTag *) {
   if (mask == 0) {
     return -1;
   }
-  return static_cast<std::int32_t>(SKSE::InputMap::GamepadMaskToKeycode(mask));
+  return static_cast<std::int32_t>(GamepadMaskToKeycode(mask));
 }
 
 void SetGamepadButton(RE::StaticFunctionTag *, std::int32_t a_keycode) {
-  Config::GamepadButton = a_keycode < 0
-                              ? 0
-                              : SKSE::InputMap::GamepadKeycodeToMask(
-                                    static_cast<std::uint32_t>(a_keycode));
+  Config::GamepadButton =
+      a_keycode < 0
+          ? 0
+          : GamepadKeycodeToMask(static_cast<std::uint32_t>(a_keycode));
+  Config::Save();
+}
+
+bool GetToggleMode(RE::StaticFunctionTag *) { return Config::ToggleMode.load(); }
+
+void SetToggleMode(RE::StaticFunctionTag *, bool a_toggle) {
+  Config::ToggleMode = a_toggle;
+  Config::Save();
+}
+
+std::int32_t GetLiveZoomBoostButton(RE::StaticFunctionTag *) {
+  const auto mask = Config::LiveZoomBoostButton.load();
+  if (mask == 0) {
+    return -1;
+  }
+  return static_cast<std::int32_t>(GamepadMaskToKeycode(mask));
+}
+
+void SetLiveZoomBoostButton(RE::StaticFunctionTag *, std::int32_t a_keycode) {
+  Config::LiveZoomBoostButton =
+      a_keycode < 0
+          ? 0
+          : GamepadKeycodeToMask(static_cast<std::uint32_t>(a_keycode));
   Config::Save();
 }
 
@@ -110,6 +156,11 @@ std::int32_t GetDefaultHotkey(RE::StaticFunctionTag *) {
 std::int32_t GetDefaultGamepadButton(RE::StaticFunctionTag *) {
   return static_cast<std::int32_t>(
       SKSE::InputMap::GamepadMaskToKeycode(0x0004));
+}
+
+std::int32_t GetDefaultLiveZoomBoostButton(RE::StaticFunctionTag *) {
+  return static_cast<std::int32_t>(
+      SKSE::InputMap::GamepadMaskToKeycode(0x0080));
 }
 
 float GetZoomFOV(RE::StaticFunctionTag *) { return Config::ZoomFOV.load(); }
@@ -216,6 +267,8 @@ bool RegisterFunctions(RE::BSScript::IVirtualMachine *a_vm) {
   a_vm->RegisterFunction("SetHotkey", kClassName, SetHotkey);
   a_vm->RegisterFunction("GetGamepadButton", kClassName, GetGamepadButton);
   a_vm->RegisterFunction("SetGamepadButton", kClassName, SetGamepadButton);
+  a_vm->RegisterFunction("GetToggleMode", kClassName, GetToggleMode);
+  a_vm->RegisterFunction("SetToggleMode", kClassName, SetToggleMode);
   a_vm->RegisterFunction("GetDefaultHotkey", kClassName, GetDefaultHotkey);
   a_vm->RegisterFunction("GetDefaultGamepadButton", kClassName,
                          GetDefaultGamepadButton);
@@ -236,6 +289,12 @@ bool RegisterFunctions(RE::BSScript::IVirtualMachine *a_vm) {
                          GetScrollUsesSmoothSpeed);
   a_vm->RegisterFunction("SetScrollUsesSmoothSpeed", kClassName,
                          SetScrollUsesSmoothSpeed);
+  a_vm->RegisterFunction("GetLiveZoomBoostButton", kClassName,
+                         GetLiveZoomBoostButton);
+  a_vm->RegisterFunction("SetLiveZoomBoostButton", kClassName,
+                         SetLiveZoomBoostButton);
+  a_vm->RegisterFunction("GetDefaultLiveZoomBoostButton", kClassName,
+                         GetDefaultLiveZoomBoostButton);
   a_vm->RegisterFunction("GetViewMode", kClassName, GetViewMode);
   a_vm->RegisterFunction("SetViewMode", kClassName, SetViewMode);
   a_vm->RegisterFunction("GetRequireWeaponSheathed", kClassName,
