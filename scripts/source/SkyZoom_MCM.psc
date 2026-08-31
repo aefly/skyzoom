@@ -31,23 +31,27 @@ Event OnPageReset(string a_page)
     _oidZoomHotkey = AddKeyMapOption("Zoom Hotkey", SkyZoom_Native.GetHotkey())
     _oidGamepadButton = AddKeyMapOption("Zoom Gamepad Button", SkyZoom_Native.GetGamepadButton())
 
-    AddHeaderOption("Zoom Settings")
+    AddHeaderOption("Zoom")
     _oidZoomFOV = AddSliderOption("Zoom FOV", SkyZoom_Native.GetZoomFOV(), "{0} deg")
     _oidSmoothSpeed = AddSliderOption("Smooth Speed", SkyZoom_Native.GetSmoothSpeed(), "{2}")
-    _oidEnableScrollZoomAdjust = AddToggleOption("Scroll to Adjust Zoom", SkyZoom_Native.GetEnableScrollZoomAdjust())
+
+    AddHeaderOption("Live Zoom Adjust")
+    _oidEnableScrollZoomAdjust = AddToggleOption("Live Zoom Adjust", SkyZoom_Native.GetEnableScrollZoomAdjust())
     int scrollZoomFlags = OPTION_FLAG_NONE
     if !SkyZoom_Native.GetEnableScrollZoomAdjust()
         scrollZoomFlags = OPTION_FLAG_DISABLED
     endif
-    _oidMinZoomFOV = AddSliderOption("Min Scroll Zoom FOV", SkyZoom_Native.GetMinZoomFOV(), "{0} deg", scrollZoomFlags)
-    _oidScrollUsesSmoothSpeed = AddToggleOption("Scroll Zoom Uses Smooth Speed", SkyZoom_Native.GetScrollUsesSmoothSpeed(), scrollZoomFlags)
+    _oidMinZoomFOV = AddSliderOption("Min Live Zoom FOV", SkyZoom_Native.GetMinZoomFOV(), "{0} deg", scrollZoomFlags)
+    _oidScrollUsesSmoothSpeed = AddToggleOption("Live Zoom Uses Smooth Speed", SkyZoom_Native.GetScrollUsesSmoothSpeed(), scrollZoomFlags)
+
+    SetCursorPosition(1) ; right column: Zoom Conditions, Look Sensitivity, then About
+
+    AddHeaderOption("Zoom Conditions")
     _oidViewMode = AddMenuOption("Active View", _viewModeOptions[SkyZoom_Native.GetViewMode()])
     _oidRequireWeaponSheathed = AddToggleOption("Require Weapon Sheathed", SkyZoom_Native.GetRequireWeaponSheathed())
     _oidAllowZoomDuringDialogue = AddToggleOption("Allow Zoom During Dialogue", SkyZoom_Native.GetAllowZoomDuringDialogue())
 
-    SetCursorPosition(1) ; right column: Mouse Sensitivity, then About
-
-    AddHeaderOption("Mouse Sensitivity")
+    AddHeaderOption("Look Sensitivity")
     _oidScaleSensitivity = AddToggleOption("Scale Sensitivity While Zoomed", SkyZoom_Native.GetScaleMouseSensitivity())
     int sensitivityExponentFlags = OPTION_FLAG_NONE
     if !SkyZoom_Native.GetScaleMouseSensitivity()
@@ -61,29 +65,29 @@ EndEvent
 
 Event OnOptionHighlight(int a_option)
     if a_option == _oidZoomHotkey
-        SetInfoText("Hold this keyboard key or mouse button in first or third person to zoom in.")
+        SetInfoText("Hold to zoom in.")
     elseif a_option == _oidGamepadButton
-        SetInfoText("Gamepad button that also holds-to-zoom, independently of the keyboard/mouse hotkey above.")
+        SetInfoText("Gamepad button to zoom in.")
     elseif a_option == _oidZoomFOV
-        SetInfoText("Field of view, in degrees, while the hotkey is held.")
+        SetInfoText("FOV while zoomed. Lower = tighter zoom.")
     elseif a_option == _oidSmoothSpeed
-        SetInfoText("How quickly the zoom eases in and out. Higher is snappier, lower is more gradual.")
+        SetInfoText("Zoom transition speed. Higher = snappier.")
     elseif a_option == _oidEnableScrollZoomAdjust
-        SetInfoText("Lets the mouse wheel (or gamepad LB/RB) adjust the zoom while the hotkey is held, between Min Scroll Zoom FOV and Zoom FOV. Zoom FOV is the loose end - releasing the hotkey is still the only way back to unzoomed.")
+        SetInfoText("Scroll the wheel or tap LB/RB to fine-tune zoom while holding the hotkey.")
     elseif a_option == _oidMinZoomFOV
-        SetInfoText("Tightest FOV reachable by scrolling in, while Scroll to Adjust Zoom is on.")
+        SetInfoText("Tightest zoom reachable with Live Zoom Adjust.")
     elseif a_option == _oidScrollUsesSmoothSpeed
-        SetInfoText("Makes the scroll-zoom ease use the same speed as Smooth Speed above, instead of its own fixed, faster timing. Off by default - a scroll notch is a much smaller hop than the full zoom-in sweep Smooth Speed is tuned for.")
+        SetInfoText("Use Smooth Speed's timing for live zoom adjustments, instead of a faster default.")
     elseif a_option == _oidViewMode
         SetInfoText("Which view(s) the hotkey zooms in.")
     elseif a_option == _oidRequireWeaponSheathed
-        SetInfoText("Only zoom while not in a ready/fighting stance - includes empty-handed H2H, not just a drawn weapon or spell. Turn off to zoom from any stance.")
+        SetInfoText("Only zoom outside a fighting stance. Off = zoom anytime, even mid-combat.")
     elseif a_option == _oidAllowZoomDuringDialogue
-        SetInfoText("Let the hotkey zoom in while talking to an NPC, even from a ready stance. Off by default, since conversations don't pause the game.")
+        SetInfoText("Also zoom during conversations.")
     elseif a_option == _oidScaleSensitivity
-        SetInfoText("Scales mouse sensitivity down while zoomed, so aim doesn't feel twitchy at a narrower FOV.")
+        SetInfoText("Lower look sensitivity while zoomed, so aim feels less twitchy.")
     elseif a_option == _oidSensitivityExponent
-        SetInfoText("How aggressively sensitivity is cut while zoomed. 1.0 scales directly with FOV; higher values cut it more at moderate zoom.")
+        SetInfoText("How hard sensitivity drops as you zoom in.")
     endif
 EndEvent
 
