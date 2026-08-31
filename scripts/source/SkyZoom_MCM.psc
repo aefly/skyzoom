@@ -2,11 +2,13 @@ ScriptName SkyZoom_MCM extends SKI_ConfigBase
 
 int _oidZoomHotkey
 int _oidGamepadButton
+int _oidToggleMode
 int _oidZoomFOV
 int _oidSmoothSpeed
 int _oidEnableScrollZoomAdjust
 int _oidMinZoomFOV
 int _oidScrollUsesSmoothSpeed
+int _oidLiveZoomBoostButton
 int _oidViewMode
 int _oidRequireWeaponSheathed
 int _oidAllowZoomDuringDialogue
@@ -27,9 +29,16 @@ EndEvent
 Event OnPageReset(string a_page)
     SetCursorFillMode(TOP_TO_BOTTOM) ; default alternates left/right per row, splitting header groups across columns
 
+    int scrollZoomFlags = OPTION_FLAG_NONE
+    if !SkyZoom_Native.GetEnableScrollZoomAdjust()
+        scrollZoomFlags = OPTION_FLAG_DISABLED
+    endif
+
     AddHeaderOption("Hotkeys")
     _oidZoomHotkey = AddKeyMapOption("Zoom Hotkey", SkyZoom_Native.GetHotkey())
     _oidGamepadButton = AddKeyMapOption("Zoom Gamepad Button", SkyZoom_Native.GetGamepadButton())
+    _oidLiveZoomBoostButton = AddKeyMapOption("Live Zoom Gamepad Button", SkyZoom_Native.GetLiveZoomBoostButton(), scrollZoomFlags)
+    _oidToggleMode = AddToggleOption("Toggle Mode", SkyZoom_Native.GetToggleMode())
 
     AddHeaderOption("Zoom")
     _oidZoomFOV = AddSliderOption("Zoom FOV", SkyZoom_Native.GetZoomFOV(), "{0} deg")
@@ -37,10 +46,6 @@ Event OnPageReset(string a_page)
 
     AddHeaderOption("Live Zoom Adjust")
     _oidEnableScrollZoomAdjust = AddToggleOption("Live Zoom Adjust", SkyZoom_Native.GetEnableScrollZoomAdjust())
-    int scrollZoomFlags = OPTION_FLAG_NONE
-    if !SkyZoom_Native.GetEnableScrollZoomAdjust()
-        scrollZoomFlags = OPTION_FLAG_DISABLED
-    endif
     _oidMinZoomFOV = AddSliderOption("Min Live Zoom FOV", SkyZoom_Native.GetMinZoomFOV(), "{0} deg", scrollZoomFlags)
     _oidScrollUsesSmoothSpeed = AddToggleOption("Live Zoom Uses Smooth Speed", SkyZoom_Native.GetScrollUsesSmoothSpeed(), scrollZoomFlags)
 
@@ -65,15 +70,27 @@ EndEvent
 
 Event OnOptionHighlight(int a_option)
     if a_option == _oidZoomHotkey
-        SetInfoText("Hold to zoom in.")
+        if SkyZoom_Native.GetToggleMode()
+            SetInfoText("Press to toggle zoom on/off.")
+        else
+            SetInfoText("Hold to zoom in.")
+        endif
     elseif a_option == _oidGamepadButton
-        SetInfoText("Gamepad button to zoom in.")
+        if SkyZoom_Native.GetToggleMode()
+            SetInfoText("Gamepad button to toggle zoom on/off.")
+        else
+            SetInfoText("Gamepad button to zoom in.")
+        endif
+    elseif a_option == _oidLiveZoomBoostButton
+        SetInfoText("Gamepad button for Live Zoom Adjust.")
+    elseif a_option == _oidToggleMode
+        SetInfoText("Press the hotkey to toggle zoom on/off, instead of holding it down.")
     elseif a_option == _oidZoomFOV
         SetInfoText("FOV while zoomed. Lower = tighter zoom.")
     elseif a_option == _oidSmoothSpeed
         SetInfoText("Zoom transition speed. Higher = snappier.")
     elseif a_option == _oidEnableScrollZoomAdjust
-        SetInfoText("Scroll the wheel or tap LB/RB to fine-tune zoom while holding the hotkey.")
+        SetInfoText("While the zoom hotkey is held, scroll the wheel or hold your Live Zoom Gamepad Button to zoom in temporarily.")
     elseif a_option == _oidMinZoomFOV
         SetInfoText("Tightest zoom reachable with Live Zoom Adjust.")
     elseif a_option == _oidScrollUsesSmoothSpeed
@@ -109,6 +126,13 @@ Event OnOptionKeyMapChange(int a_option, int a_keyCode, string a_conflictControl
             SetKeyMapOptionValue(a_option, a_keyCode)
         else
             SetKeyMapOptionValue(a_option, SkyZoom_Native.GetGamepadButton())
+        endif
+    elseif a_option == _oidLiveZoomBoostButton
+        if SkyZoom_Native.IsGamepadKeycode(a_keyCode) || a_keyCode == -1
+            SkyZoom_Native.SetLiveZoomBoostButton(a_keyCode)
+            SetKeyMapOptionValue(a_option, a_keyCode)
+        else
+            SetKeyMapOptionValue(a_option, SkyZoom_Native.GetLiveZoomBoostButton())
         endif
     endif
 EndEvent
@@ -181,10 +205,15 @@ Event OnOptionSelect(int a_option)
         endif
         SetOptionFlags(_oidMinZoomFOV, scrollZoomFlags)
         SetOptionFlags(_oidScrollUsesSmoothSpeed, scrollZoomFlags)
+        SetOptionFlags(_oidLiveZoomBoostButton, scrollZoomFlags)
     elseif a_option == _oidScrollUsesSmoothSpeed
         bool scrollUsesSmoothSpeed = !SkyZoom_Native.GetScrollUsesSmoothSpeed()
         SkyZoom_Native.SetScrollUsesSmoothSpeed(scrollUsesSmoothSpeed)
         SetToggleOptionValue(a_option, scrollUsesSmoothSpeed)
+    elseif a_option == _oidToggleMode
+        bool toggleMode = !SkyZoom_Native.GetToggleMode()
+        SkyZoom_Native.SetToggleMode(toggleMode)
+        SetToggleOptionValue(a_option, toggleMode)
     endif
 EndEvent
 
@@ -198,6 +227,13 @@ Event OnOptionDefault(int a_option)
         int defaultGamepadButton = SkyZoom_Native.GetDefaultGamepadButton()
         SkyZoom_Native.SetGamepadButton(defaultGamepadButton)
         SetKeyMapOptionValue(a_option, defaultGamepadButton)
+    elseif a_option == _oidLiveZoomBoostButton
+        int defaultLiveZoomBoostButton = SkyZoom_Native.GetDefaultLiveZoomBoostButton()
+        SkyZoom_Native.SetLiveZoomBoostButton(defaultLiveZoomBoostButton)
+        SetKeyMapOptionValue(a_option, defaultLiveZoomBoostButton)
+    elseif a_option == _oidToggleMode
+        SkyZoom_Native.SetToggleMode(false)
+        SetToggleOptionValue(a_option, false)
     elseif a_option == _oidZoomFOV
         SkyZoom_Native.SetZoomFOV(60.0)
         SetSliderOptionValue(a_option, 60.0, "{0} deg")
@@ -209,6 +245,7 @@ Event OnOptionDefault(int a_option)
         SetToggleOptionValue(a_option, true)
         SetOptionFlags(_oidMinZoomFOV, OPTION_FLAG_NONE)
         SetOptionFlags(_oidScrollUsesSmoothSpeed, OPTION_FLAG_NONE)
+        SetOptionFlags(_oidLiveZoomBoostButton, OPTION_FLAG_NONE)
     elseif a_option == _oidMinZoomFOV
         SkyZoom_Native.SetMinZoomFOV(20.0)
         SetSliderOptionValue(a_option, 20.0, "{0} deg")
