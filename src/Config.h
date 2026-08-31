@@ -13,6 +13,20 @@ inline std::atomic<std::uint32_t> GamepadButton =
 inline std::atomic<float> ZoomFOV = 60.0f;
 inline std::atomic<float> SmoothSpeed = 8.0f;
 
+// Whether scrolling the mouse wheel (or gamepad LB/RB) while the
+// hotkey is held adjusts the zoom live, between MinZoomFOV and ZoomFOV
+// (ZoomFOV acts as the loose-end ceiling - releasing the hotkey is still
+// the only way back to the unzoomed FOV). Default: on.
+inline std::atomic<bool> EnableScrollZoomAdjust = true;
+// Tightest FOV reachable by scrolling in while EnableScrollZoomAdjust is on.
+// Clamped to ZoomFOV at use time, so a misconfigured value above it can't
+// invert the range.
+inline std::atomic<float> MinZoomFOV = 20.0f;
+// Whether the scroll-zoom ease uses SmoothSpeed's duration instead of its
+// own fixed, faster timing. Off by default - a scroll notch is a much
+// smaller hop than the full press-in sweep SmoothSpeed is tuned for.
+inline std::atomic<bool> ScrollUsesSmoothSpeed = false;
+
 enum ViewMode : std::uint32_t {
   kFirstPersonOnly = 0,
   kThirdPersonOnly = 1,
@@ -28,10 +42,10 @@ inline std::atomic<bool> RequireWeaponSheathed = true;
 // conversation. Default: off.
 inline std::atomic<bool> AllowZoomDuringDialogue = false;
 
-// Whether to scale mouse sensitivity down while zoomed, so aim doesn't feel
-// twitchy at a narrower FOV. Default: on.
+// Whether to scale mouse and gamepad look sensitivity down while zoomed, so
+// aim doesn't feel twitchy at a narrower FOV. Default: on.
 inline std::atomic<bool> ScaleMouseSensitivity = true;
-// Exponent applied to the FOV ratio (currentFOV/baseFOV) when scaling mouse
+// Exponent applied to the FOV ratio (currentFOV/baseFOV) when scaling
 // sensitivity while zoomed - 1.0 scales linearly with FOV, higher values cut
 // sensitivity more aggressively at moderate zoom without changing the
 // no-zoom (ratio=1) or fully-zoomed (ratio=0) endpoints. Only relevant while
