@@ -12,10 +12,10 @@ for what it does, why it exists, and how to build/install it.
 
 ## Patches
 
-| Patch                                            | Targets                                   | Branch                      |
-| ------------------------------------------------- | ------------------------------------------- | ---------------------------- |
-| [Improved Camera SE][improved-camera-readme]     | [Improved Camera SE][improved-camera-se]  | `patch/improved-camera`     |
-| [FirstPersonFOVSKSE][first-person-fov-readme]    | [FirstPersonFOVSKSE][first-person-fov-se] | `patch/FirstPersonFOVSKSE`  |
+| Patch                                         | Targets                                   | Branch                     |
+| --------------------------------------------- | ----------------------------------------- | -------------------------- |
+| [Improved Camera SE][improved-camera-readme]  | [Improved Camera SE][improved-camera-se]  | `patch/improved-camera`    |
+| [FirstPersonFOVSKSE][first-person-fov-readme] | [FirstPersonFOVSKSE][first-person-fov-se] | `patch/FirstPersonFOVSKSE` |
 
 Each README link above points at that patch's own branch, not this one -
 that's where its actual code lives.
