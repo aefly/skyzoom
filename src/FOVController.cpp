@@ -6,6 +6,11 @@
 #include <array>
 #include <cmath>
 
+// Some RE/* headers pull in the real <Windows.h> (see Hooks.cpp), which
+// defines min/max as object-like macros shadowing std::min/std::max.
+#undef min
+#undef max
+
 // Skyrim has no re-readable ini Setting for first-person FOV, so this writes
 // RE::PlayerCamera::worldFOV directly. The first-person viewmodel (arms +
 // weapon) is rendered separately using its own firstPersonFOV member, so
@@ -22,6 +27,15 @@ float g_fromFirstPersonFOVDeg = 90.0f;
 float g_toFirstPersonFOVDeg = 90.0f;
 float g_transitionT = 1.0f;
 float g_baseSensitivity = 0.0f;
+float g_baseGamepadSensitivity = 0.0f;
+
+// Config::ZoomFOV as adjusted by the mouse wheel or gamepad LB/RB this
+// hold, within [MinZoomFOV, ZoomFOV] - kept separate from Config::ZoomFOV
+// so scrolling never writes back to the ini/MCM value. g_toFOVDeg chases
+// this via SmoothDamp (see Update()) rather than jumping straight to it.
+float g_scrollZoomFOV = 60.0f;
+// SmoothDamp's persisted velocity state for the chase above.
+float g_scrollFOVVelocity = 0.0f;
 
 // Same from/to/t transition as above, in 0..1 instead of degrees - for
 // GetActiveZoomWeight() below, so a compat patch can blend rather than
@@ -34,49 +48,123 @@ std::atomic<bool> g_exportedActive{false};
 std::atomic<float> g_exportedWeight{0.0f};
 std::atomic<float> g_exportedTargetFOV{90.0f};
 
+// Tracks whether SuppressWheelControls() below is currently in effect.
+bool g_wheelControlsSuppressed = false;
+
+// Shared by both functions below - kPOVSwitch/kWheelZoom, the two vanilla
+// control groups the mouse wheel drives on its own.
+RE::UserEvents::USER_EVENT_FLAG WheelControlFlags() noexcept {
+  return static_cast<RE::UserEvents::USER_EVENT_FLAG>(
+      static_cast<std::uint32_t>(RE::UserEvents::USER_EVENT_FLAG::kPOVSwitch) |
+      static_cast<std::uint32_t>(RE::UserEvents::USER_EVENT_FLAG::kWheelZoom));
+}
+
+// Vanilla binds the mouse wheel to POV switching and third-person camera
+// zoom, which fight with the hotkey-held zoom (e.g. scrolling out while
+// zoomed in first person flips to third person) - suppressed for the hold
+// via the same ControlMap API the game uses to disable controls in menus.
+void SuppressWheelControls() noexcept {
+  if (g_wheelControlsSuppressed) {
+    return;
+  }
+  auto *controlMap = RE::ControlMap::GetSingleton();
+  if (!controlMap) {
+    return;
+  }
+  controlMap->ToggleControls(WheelControlFlags(), false, true);
+  g_wheelControlsSuppressed = true;
+}
+
+void RestoreWheelControls() noexcept {
+  if (!g_wheelControlsSuppressed) {
+    return;
+  }
+  // Re-enables only these two flags, not a full enabledControls snapshot
+  // restore - that would also re-enable anything else disabled during the
+  // hold (e.g. movement, if a menu opened mid-hold).
+  if (auto *controlMap = RE::ControlMap::GetSingleton()) {
+    controlMap->ToggleControls(WheelControlFlags(), true, true);
+  }
+  g_wheelControlsSuppressed = false;
+}
+
 // Smoothstep: zero velocity at both ends, so the transition never jolts.
 float SmoothStep(float a_t) noexcept {
   const float t = std::clamp(a_t, 0.0f, 1.0f);
   return t * t * (3.0f - 2.0f * t);
 }
 
+// Critically-damped spring follow (Game Programming Gems 4's SmoothDamp) -
+// unlike a from/to/duration transition it has no "restart", so a target
+// that keeps moving (wheel notch mid-chase, gamepad ramp) never jolts.
+// a_velocity is the follower's own persisted state, updated in place.
+float SmoothDamp(float a_current, float a_target, float &a_velocity,
+                 float a_smoothTime, float a_dt) noexcept {
+  const float dt = std::max(a_dt, 1e-5f); // guard div-by-zero below
+  const float smoothTime = std::max(a_smoothTime, 0.0001f);
+  const float omega = 2.0f / smoothTime;
+  const float x = omega * dt;
+  const float exp = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+  const float change = a_current - a_target;
+  const float temp = (a_velocity + omega * change) * dt;
+  a_velocity = (a_velocity - omega * temp) * exp;
+  float result = a_target + (change + temp) * exp;
+  // Prevent overshoot past the target reversing direction.
+  if ((a_target - a_current > 0.0f) == (result > a_target)) {
+    result = a_target;
+    a_velocity = (result - a_target) / dt;
+  }
+  return result;
+}
+
+// Ini/pref Setting collections key settings as "Name:Section" internally,
+// not the bare key alone.
+RE::Setting *FindSetting(const char *a_name) noexcept {
+  if (auto *prefs = RE::INIPrefSettingCollection::GetSingleton()) {
+    if (auto *setting = prefs->GetSetting(a_name)) {
+      return setting;
+    }
+  }
+  if (auto *ini = RE::INISettingCollection::GetSingleton()) {
+    if (auto *setting = ini->GetSetting(a_name)) {
+      return setting;
+    }
+  }
+  return nullptr;
+}
+
 // Reads/writes "fMouseHeadingSensitivity:Controls" (SkyrimPrefs.ini,
-// [Controls]) - Skyrim's ini/pref Setting collections key settings as
-// "Name:Section" internally (matching the ini's [Section] header), not the
-// bare key alone; see e.g. CommonLibSSE-NG's own
-// SKSE/Translation.cpp:GetSetting("sLanguage:General"). Scaling this
-// alongside the FOV keeps mouse-look feeling consistent while zoomed:
-// without it, the same physical mouse movement sweeps a much larger angle
-// on screen once the FOV (and thus degrees-per-pixel) shrinks, making aim
-// twitchy at low zoom FOVs.
+// [Controls]). Scaling this alongside the FOV keeps mouse-look feeling
+// consistent while zoomed: without it, the same physical mouse movement
+// sweeps a much larger angle on screen once the FOV (and thus
+// degrees-per-pixel) shrinks, making aim twitchy at low zoom FOVs.
 RE::Setting *GetMouseSensitivitySetting() noexcept {
   static RE::Setting *cached = nullptr;
-  if (cached) {
-    return cached;
-  }
-
-  constexpr auto kSettingName = "fMouseHeadingSensitivity:Controls";
-
-  if (auto *prefs = RE::INIPrefSettingCollection::GetSingleton()) {
-    if (auto *setting = prefs->GetSetting(kSettingName)) {
-      cached = setting;
-    }
-  }
-
   if (!cached) {
-    if (auto *ini = RE::INISettingCollection::GetSingleton()) {
-      if (auto *setting = ini->GetSetting(kSettingName)) {
-        cached = setting;
-      }
+    cached = FindSetting("fMouseHeadingSensitivity:Controls");
+    if (cached) {
+      SKSE::log::info("SkyZoom: mouse sensitivity setting found ({:X}), "
+                      "current value={:.4f}",
+                      reinterpret_cast<std::uintptr_t>(cached),
+                      cached->GetFloat());
     }
   }
+  return cached;
+}
 
-  if (cached) {
-    SKSE::log::info(
-        "SkyZoom: mouse sensitivity setting found ({:X}), current value={:.4f}",
-        reinterpret_cast<std::uintptr_t>(cached), cached->GetFloat());
+// Gamepad counterpart of the setting above - GamepadButton can itself
+// trigger the zoom, so controller look needs the same compensation.
+RE::Setting *GetGamepadSensitivitySetting() noexcept {
+  static RE::Setting *cached = nullptr;
+  if (!cached) {
+    cached = FindSetting("fGamePadHeadingSensitivity:Controls");
+    if (cached) {
+      SKSE::log::info("SkyZoom: gamepad sensitivity setting found ({:X}), "
+                      "current value={:.4f}",
+                      reinterpret_cast<std::uintptr_t>(cached),
+                      cached->GetFloat());
+    }
   }
-
   return cached;
 }
 
@@ -111,6 +199,12 @@ void Update() {
   float dt = std::chrono::duration<float>(now - lastTime).count();
   lastTime = now;
   dt = std::clamp(dt, 0.0f, 0.1f); // guard against spikes (loading, alt-tab)
+
+  // Drained every frame regardless of zoom state, so wheel scrolls made
+  // while not zooming never carry over as a jump next time the hotkey is
+  // pressed. Gamepad LB/RB use Input::GetGamepadScrollDirection() instead
+  // (continuous held state, not discrete notches).
+  const std::int32_t scrollSteps = Input::ConsumeScrollSteps();
 
   auto *playerCamera = RE::PlayerCamera::GetSingleton();
   const bool inFirstPerson = playerCamera && playerCamera->currentState &&
@@ -155,6 +249,7 @@ void Update() {
   const bool hotkeyDown =
       !weaponBlocksZoom && !dialogueBlocksZoom && Input::IsHotkeyDown();
   auto *sensSetting = GetMouseSensitivitySetting();
+  auto *gamepadSensSetting = GetGamepadSensitivitySetting();
 
   if (!playerCamera || !inZoomableView || menuOpen) {
     // Reset here, not just on the press/release edge below, so leaving
@@ -168,12 +263,21 @@ void Update() {
       if (sensSetting) {
         sensSetting->SetFloat(g_baseSensitivity);
       }
+      if (gamepadSensSetting) {
+        gamepadSensSetting->SetFloat(g_baseGamepadSensitivity);
+      }
     }
     g_active = false;
     g_hotkeyWasDown = false;
     g_exportedActive.store(false, std::memory_order_relaxed);
+    RestoreWheelControls();
+    Input::SetScrollZoomActive(false);
     return;
   }
+
+  const bool scrollZoomActive =
+      hotkeyDown && Config::EnableScrollZoomAdjust.load();
+  Input::SetScrollZoomActive(scrollZoomActive);
 
   if (hotkeyDown != g_hotkeyWasDown) {
     // Start a new transition from wherever the current one left off, so
@@ -184,6 +288,9 @@ void Update() {
       if (sensSetting) {
         g_baseSensitivity = sensSetting->GetFloat();
       }
+      if (gamepadSensSetting) {
+        g_baseGamepadSensitivity = gamepadSensSetting->GetFloat();
+      }
     }
     const float t = SmoothStep(g_transitionT);
     g_fromFOVDeg = g_active ? (g_fromFOVDeg + (g_toFOVDeg - g_fromFOVDeg) * t)
@@ -192,9 +299,16 @@ void Update() {
         g_active ? (g_fromFirstPersonFOVDeg +
                     (g_toFirstPersonFOVDeg - g_fromFirstPersonFOVDeg) * t)
                  : g_baseFirstPersonFOVDeg;
-    g_toFOVDeg = hotkeyDown ? Config::ZoomFOV.load() : g_baseFOVDeg;
+    if (hotkeyDown) {
+      g_scrollZoomFOV = Config::ZoomFOV.load();
+      g_scrollFOVVelocity = 0.0f;
+      SuppressWheelControls();
+    } else {
+      RestoreWheelControls();
+    }
+    g_toFOVDeg = hotkeyDown ? g_scrollZoomFOV : g_baseFOVDeg;
     g_toFirstPersonFOVDeg =
-        hotkeyDown ? Config::ZoomFOV.load() : g_baseFirstPersonFOVDeg;
+        hotkeyDown ? g_scrollZoomFOV : g_baseFirstPersonFOVDeg;
     g_fromWeight =
         g_active ? (g_fromWeight + (g_toWeight - g_fromWeight) * t) : 0.0f;
     g_toWeight = hotkeyDown ? 1.0f : 0.0f;
@@ -208,8 +322,48 @@ void Update() {
     return;
   }
 
+  // Shared with the scroll-adjust SmoothDamp below when
+  // Config::ScrollUsesSmoothSpeed opts into it instead of kScrollSmoothTime.
   const float duration =
       std::clamp(3.0f / Config::SmoothSpeed.load(), 0.05f, 5.0f);
+
+  // g_scrollZoomFOV is the scroll-adjusted target within [MinZoomFOV,
+  // ZoomFOV] - ZoomFOV is the loose end, so scrolling out can never fully
+  // cancel the zoom; only releasing the hotkey does. The wheel moves it in
+  // instant kScrollStepDeg jumps per notch; the gamepad ramps it
+  // continuously while held. g_toFOVDeg then eases toward it via
+  // SmoothDamp, not the outer press/release transition - that one's
+  // fixed-duration ease is sized for the whole press-to-ZoomFOV sweep and
+  // would either snap or need restart-avoidance logic for small,
+  // fast-repeating notches.
+  if (scrollZoomActive) {
+    constexpr float kScrollStepDeg = 5.0f;
+    constexpr float kGamepadScrollDegPerSec = 60.0f;
+    constexpr float kScrollSmoothTime = 0.12f;
+    const float maxFOV = Config::ZoomFOV.load();
+    const float minFOV = std::min(Config::MinZoomFOV.load(), maxFOV);
+
+    if (scrollSteps != 0) {
+      g_scrollZoomFOV = std::clamp(
+          g_scrollZoomFOV - static_cast<float>(scrollSteps) * kScrollStepDeg,
+          minFOV, maxFOV);
+    }
+
+    const std::int32_t gamepadDir = Input::GetGamepadScrollDirection();
+    if (gamepadDir != 0) {
+      g_scrollZoomFOV =
+          std::clamp(g_scrollZoomFOV - static_cast<float>(gamepadDir) *
+                                           kGamepadScrollDegPerSec * dt,
+                     minFOV, maxFOV);
+    }
+
+    const float smoothTime =
+        Config::ScrollUsesSmoothSpeed.load() ? duration : kScrollSmoothTime;
+    g_toFOVDeg = SmoothDamp(g_toFOVDeg, g_scrollZoomFOV, g_scrollFOVVelocity,
+                            smoothTime, dt);
+    g_toFirstPersonFOVDeg = g_toFOVDeg; // kept equal while active
+  }
+
   g_transitionT = std::clamp(g_transitionT + dt / duration, 0.0f, 1.0f);
   const float t = SmoothStep(g_transitionT);
 
@@ -220,22 +374,28 @@ void Update() {
 
   const float weight = g_fromWeight + (g_toWeight - g_fromWeight) * t;
   g_exportedWeight.store(weight, std::memory_order_relaxed);
-  g_exportedTargetFOV.store(Config::ZoomFOV.load(), std::memory_order_relaxed);
+  // g_toFOVDeg, not Config::ZoomFOV - a compat patch blending toward this
+  // should track the scroll-adjusted target, not the static ini ceiling.
+  g_exportedTargetFOV.store(g_toFOVDeg, std::memory_order_relaxed);
   g_exportedActive.store(true, std::memory_order_relaxed);
 
-  // Scales sensitivity by the FOV ratio (raised to Config::SensitivityExponent
-  // - see its declaration for why), so it rides the same eased transition as
-  // the FOV itself with no separate easing state needed. Gated on
-  // Config::ScaleMouseSensitivity only here (not on the sampling/restore
-  // above/below) so toggling it off mid-zoom still restores whatever it had
-  // last scaled to, instead of leaving it stuck.
-  if (sensSetting && Config::ScaleMouseSensitivity.load() &&
-      g_baseFOVDeg > 0.0f) {
+  // Scales mouse and gamepad sensitivity by the FOV ratio (raised to
+  // Config::SensitivityExponent - see its declaration for why), so it rides
+  // the same eased transition as the FOV itself with no separate easing
+  // state needed. Gated on Config::ScaleMouseSensitivity only here (not on
+  // the sampling/restore above/below) so toggling it off mid-zoom still
+  // restores whatever it had last scaled to, instead of leaving it stuck.
+  if (Config::ScaleMouseSensitivity.load() && g_baseFOVDeg > 0.0f) {
     const float fovRatio =
         std::clamp(playerCamera->worldFOV / g_baseFOVDeg, 0.0f, 1.0f);
     const float sensScale =
         std::pow(fovRatio, Config::SensitivityExponent.load());
-    sensSetting->SetFloat(g_baseSensitivity * sensScale);
+    if (sensSetting) {
+      sensSetting->SetFloat(g_baseSensitivity * sensScale);
+    }
+    if (gamepadSensSetting) {
+      gamepadSensSetting->SetFloat(g_baseGamepadSensitivity * sensScale);
+    }
   }
 
   if (!hotkeyDown && g_transitionT >= 1.0f) {
@@ -244,6 +404,9 @@ void Update() {
     playerCamera->firstPersonFOV = g_baseFirstPersonFOVDeg;
     if (sensSetting) {
       sensSetting->SetFloat(g_baseSensitivity);
+    }
+    if (gamepadSensSetting) {
+      gamepadSensSetting->SetFloat(g_baseGamepadSensitivity);
     }
     g_active = false;
     g_exportedActive.store(false, std::memory_order_relaxed);
