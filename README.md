@@ -41,8 +41,13 @@ camera/scene-graph memory. See [How it works](#how-it-works) below.
   without recompiling.
 - **Per-view toggle** — zoom in first person only, third person only, or
   both.
-- **Mouse sensitivity compensation** — optionally scales mouse sensitivity
-  down while zoomed, so aim doesn't get twitchy at a narrower FOV.
+- **Scroll-adjustable zoom** — optionally, the mouse wheel (or gamepad
+  LB/RB) nudges the FOV live while the hotkey is held, between a
+  configurable floor and the configured `ZoomFOV` (releasing the hotkey is
+  still the only way back to the unzoomed FOV).
+- **Sensitivity compensation** — optionally scales mouse and gamepad look
+  sensitivity down while zoomed, so aim doesn't get twitchy at a narrower
+  FOV.
 - **MCM menu** — if [SkyUI][skyui] is installed, all of the above are
   configurable from an in-game menu (Mod Configuration Menu) instead of
   hand-editing `SkyZoom.ini`. Changes apply immediately, no restart needed.
@@ -76,17 +81,20 @@ applied immediately.
 Otherwise, edit `SkyZoom.ini` next to the DLL (created with defaults on
 first launch if missing) and restart the game to apply changes:
 
-| Key                       | Default | Description                                                                                                    |
-| ------------------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
-| `Hotkey`                  | `5`     | Virtual-key code of the hold-to-zoom key (`5` = Mouse Button 4 / M4)                                           |
-| `GamepadButton`           | `4`     | XInput button bitmask that also holds-to-zoom (`4` = D-Pad Left; `0` disables)                                 |
-| `ZoomFOV`                 | `60.0`  | FOV in degrees while the hotkey is held                                                                        |
-| `SmoothSpeed`             | `8.0`   | Ease-in/ease-out speed for the zoom transition (higher = snappier)                                             |
-| `ViewMode`                | `2`     | Which view(s) the hotkey zooms in (`0` = first person only, `1` = third person only, `2` = both)               |
-| `RequireWeaponSheathed`   | `1`     | Only zoom while not in a ready/fighting stance, weapon or H2H (`1` = on, `0` = zoom works from any stance too) |
-| `AllowZoomDuringDialogue` | `0`     | Let the hotkey zoom while talking to an NPC, even from a ready stance (`1` = on, `0` = off, default)           |
-| `ScaleMouseSensitivity`   | `1`     | Scale mouse sensitivity down while zoomed (`1` = on, `0` = off)                                                |
-| `SensitivityExponent`     | `2.5`   | How aggressively sensitivity is cut while zoomed (higher = more aggressive at moderate zoom)                   |
+| Key                       | Default | Description                                                                                                           |
+| ------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------- |
+| `Hotkey`                  | `5`     | Virtual-key code of the hold-to-zoom key (`5` = Mouse Button 4 / M4)                                                  |
+| `GamepadButton`           | `4`     | XInput button bitmask that also holds-to-zoom (`4` = D-Pad Left; `0` disables)                                        |
+| `ZoomFOV`                 | `60.0`  | FOV in degrees while the hotkey is held                                                                               |
+| `SmoothSpeed`             | `8.0`   | Ease-in/ease-out speed for the zoom transition (higher = snappier)                                                    |
+| `EnableScrollZoomAdjust`  | `1`     | Let the mouse wheel (or gamepad LB/RB) adjust the zoom live, between `MinZoomFOV` and `ZoomFOV` (`1` = on, `0` = off) |
+| `MinZoomFOV`              | `20.0`  | Tightest FOV reachable by scrolling in, while `EnableScrollZoomAdjust` is on                                          |
+| `ScrollUsesSmoothSpeed`   | `0`     | Scroll-zoom ease uses `SmoothSpeed`'s speed instead of its own fixed, faster timing (`1` = on, `0` = off)             |
+| `ViewMode`                | `2`     | Which view(s) the hotkey zooms in (`0` = first person only, `1` = third person only, `2` = both)                      |
+| `RequireWeaponSheathed`   | `1`     | Only zoom while not in a ready/fighting stance, weapon or H2H (`1` = on, `0` = zoom works from any stance too)        |
+| `AllowZoomDuringDialogue` | `0`     | Let the hotkey zoom while talking to an NPC, even from a ready stance (`1` = on, `0` = off, default)                  |
+| `ScaleMouseSensitivity`   | `1`     | Scale mouse and gamepad look sensitivity down while zoomed (`1` = on, `0` = off)                                      |
+| `SensitivityExponent`     | `2.5`   | How aggressively sensitivity is cut while zoomed (higher = more aggressive at moderate zoom)                          |
 
 ## Compatibility
 
@@ -220,10 +228,25 @@ into `RE::PlayerCamera::worldFOV` and `firstPersonFOV` (the latter
 only matters in first person, but is harmless to keep in sync in third
 person too), so the scene and the first-person viewmodel (arms/weapon) zoom
 together as one picture. If `ScaleMouseSensitivity` is on, the same
-transition also scales `fMouseHeadingSensitivity:Controls` (SkyrimPrefs.ini)
-by `(currentFOV / baseFOV) ^ SensitivityExponent`, so mouse-look doesn't
-feel twitchy at a narrower FOV. See the comments in `Hooks.cpp` and
-`FOVController.cpp` for more detail.
+transition also scales `fMouseHeadingSensitivity:Controls` and
+`fGamePadHeadingSensitivity:Controls` (both SkyrimPrefs.ini) by
+`(currentFOV / baseFOV) ^ SensitivityExponent`, so look sensitivity doesn't
+feel twitchy at a narrower FOV regardless of which device you're aiming
+with. See the comments in `Hooks.cpp` and `FOVController.cpp` for more
+detail.
+
+While the hold is active and `EnableScrollZoomAdjust` is on, a prepended
+`RE::BSInputDeviceManager` event sink counts mouse wheel notches (idCodes 8/9,
+run ahead of the menu/player control sinks so a claimed notch can be
+neutered before they see it) and `GetGamepadScrollDirection()` polls XInput
+for LB/RB, moving a scroll target within `[MinZoomFOV, ZoomFOV]`;
+`FOVController::Update()` chases that target with a critically-damped
+SmoothDamp spring instead of the outer press/release transition, since the
+latter's fixed-duration ease is sized for the whole zoom-in sweep, not small,
+fast-repeating notches. For the duration of the hold, `RE::ControlMap`'s
+`kPOVSwitch`/`kWheelZoom` flags are toggled off so the same wheel notches
+don't also fight the hold by switching POV or driving vanilla's own
+third-person camera zoom.
 
 ## License
 
