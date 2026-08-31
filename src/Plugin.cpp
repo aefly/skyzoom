@@ -5,12 +5,21 @@
 
 #include "Config.h"
 #include "Hooks.h"
+#include "Input.h"
 #include "Papyrus.h"
 
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
 
 namespace {
+// RE::BSInputDeviceManager isn't guaranteed to exist yet at plugin load -
+// wait for SKSE's kInputLoaded message before registering the wheel sink.
+void OnSKSEMessage(SKSE::MessagingInterface::Message *a_message) {
+  if (a_message->type == SKSE::MessagingInterface::kInputLoaded) {
+    Input::InstallWheelSink();
+  }
+}
+
 // Documents\My Games\Skyrim Special Edition\SKSE\SkyZoom.log
 void InitializeLogging() {
   auto path = SKSE::log::log_directory();
@@ -49,6 +58,10 @@ SKSEPluginLoad(const SKSE::LoadInterface *a_skse) {
   Config::Load();
   Hooks::Install();
   Papyrus::Register();
+
+  if (auto *messaging = SKSE::GetMessagingInterface()) {
+    messaging->RegisterListener(OnSKSEMessage);
+  }
 
   return true;
 }
