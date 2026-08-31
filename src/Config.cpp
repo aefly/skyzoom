@@ -53,6 +53,28 @@ void WriteIni(const std::filesystem::path &a_path) {
       << SmoothSpeed.load()
       << "\n"
          "\n"
+         "# Whether scrolling the mouse wheel (or gamepad LB/RB) "
+         "while the hotkey is held adjusts the zoom live, between "
+         "MinZoomFOV and ZoomFOV below (1 = on, default; 0 = off). ZoomFOV "
+         "is the loose end of that range - releasing the hotkey is still "
+         "the only way back to the unzoomed FOV.\n"
+         "EnableScrollZoomAdjust="
+      << (EnableScrollZoomAdjust.load() ? 1 : 0)
+      << "\n"
+         "\n"
+         "# Tightest FOV reachable by scrolling in while "
+         "EnableScrollZoomAdjust=1 above.\n"
+         "MinZoomFOV="
+      << MinZoomFOV.load()
+      << "\n"
+         "\n"
+         "# Whether the scroll-zoom ease above uses the same speed as "
+         "SmoothSpeed below, instead of its own fixed, faster timing (1 = "
+         "on; 0 = off, default).\n"
+         "ScrollUsesSmoothSpeed="
+      << (ScrollUsesSmoothSpeed.load() ? 1 : 0)
+      << "\n"
+         "\n"
          "# Which view(s) the hotkey zooms in. 0 = first person only, 1 = "
          "third person only, 2 = both (default).\n"
          "ViewMode="
@@ -75,14 +97,14 @@ void WriteIni(const std::filesystem::path &a_path) {
       << (AllowZoomDuringDialogue.load() ? 1 : 0)
       << "\n"
          "\n"
-         "# Whether to scale mouse sensitivity down while zoomed, so aim "
-         "doesn't feel twitchy at a narrower FOV (1 = on, 0 = off).\n"
+         "# Whether to scale mouse and gamepad look sensitivity down while "
+         "zoomed, so aim doesn't feel twitchy at a narrower FOV (1 = on, 0 "
+         "= off).\n"
          "ScaleMouseSensitivity="
       << (ScaleMouseSensitivity.load() ? 1 : 0)
       << "\n"
          "\n"
-         "# How aggressively mouse sensitivity is cut while zoomed (only "
-         "used\n"
+         "# How aggressively sensitivity is cut while zoomed (only used\n"
          "# while ScaleMouseSensitivity=1 above). 1.0 cuts it in direct "
          "proportion\n"
          "# to the FOV ratio; higher values cut it more aggressively at "
@@ -135,6 +157,12 @@ void Load() {
       ZoomFOV = std::clamp(std::strtof(val.c_str(), nullptr), 1.0f, 170.0f);
     } else if (key == "SmoothSpeed") {
       SmoothSpeed = std::clamp(std::strtof(val.c_str(), nullptr), 0.1f, 60.0f);
+    } else if (key == "EnableScrollZoomAdjust") {
+      EnableScrollZoomAdjust = std::strtoul(val.c_str(), nullptr, 10) != 0;
+    } else if (key == "MinZoomFOV") {
+      MinZoomFOV = std::clamp(std::strtof(val.c_str(), nullptr), 1.0f, 170.0f);
+    } else if (key == "ScrollUsesSmoothSpeed") {
+      ScrollUsesSmoothSpeed = std::strtoul(val.c_str(), nullptr, 10) != 0;
     } else if (key == "ViewMode") {
       ActiveViewMode = std::clamp(
           static_cast<std::uint32_t>(std::strtoul(val.c_str(), nullptr, 10)),
@@ -154,25 +182,31 @@ void Load() {
 
   SKSE::log::info(
       "SkyZoom config: Hotkey=0x{:X} GamepadButton=0x{:X} ZoomFOV={:.1f} "
-      "SmoothSpeed={:.1f} ViewMode={} RequireWeaponSheathed={} "
+      "SmoothSpeed={:.1f} EnableScrollZoomAdjust={} MinZoomFOV={:.1f} "
+      "ScrollUsesSmoothSpeed={} ViewMode={} RequireWeaponSheathed={} "
       "AllowZoomDuringDialogue={} ScaleMouseSensitivity={} "
       "SensitivityExponent={:.2f}",
       Hotkey.load(), GamepadButton.load(), ZoomFOV.load(), SmoothSpeed.load(),
-      ActiveViewMode.load(), RequireWeaponSheathed.load(),
-      AllowZoomDuringDialogue.load(), ScaleMouseSensitivity.load(),
-      SensitivityExponent.load());
+      EnableScrollZoomAdjust.load(), MinZoomFOV.load(),
+      ScrollUsesSmoothSpeed.load(), ActiveViewMode.load(),
+      RequireWeaponSheathed.load(), AllowZoomDuringDialogue.load(),
+      ScaleMouseSensitivity.load(), SensitivityExponent.load());
 }
 
 void Save() {
   WriteIni(GetIniPath());
 
   SKSE::log::info("SkyZoom config saved: Hotkey=0x{:X} GamepadButton=0x{:X} "
-                  "ZoomFOV={:.1f} SmoothSpeed={:.1f} ViewMode={} "
+                  "ZoomFOV={:.1f} SmoothSpeed={:.1f} "
+                  "EnableScrollZoomAdjust={} MinZoomFOV={:.1f} "
+                  "ScrollUsesSmoothSpeed={} ViewMode={} "
                   "RequireWeaponSheathed={} AllowZoomDuringDialogue={} "
                   "ScaleMouseSensitivity={} SensitivityExponent={:.2f}",
                   Hotkey.load(), GamepadButton.load(), ZoomFOV.load(),
-                  SmoothSpeed.load(), ActiveViewMode.load(),
-                  RequireWeaponSheathed.load(), AllowZoomDuringDialogue.load(),
-                  ScaleMouseSensitivity.load(), SensitivityExponent.load());
+                  SmoothSpeed.load(), EnableScrollZoomAdjust.load(),
+                  MinZoomFOV.load(), ScrollUsesSmoothSpeed.load(),
+                  ActiveViewMode.load(), RequireWeaponSheathed.load(),
+                  AllowZoomDuringDialogue.load(), ScaleMouseSensitivity.load(),
+                  SensitivityExponent.load());
 }
 } // namespace Config
