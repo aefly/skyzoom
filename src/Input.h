@@ -3,6 +3,10 @@
 namespace Input {
 bool IsHotkeyDown() noexcept;
 
+// Exposed for ToggleMode's edge detection to freeze on, since
+// IsHotkeyDown() always reads false while unfocused.
+bool IsGameWindowFocused() noexcept;
+
 // Registers the mouse wheel sink - call once SKSE's kInputLoaded message
 // fires, so RE::BSInputDeviceManager is guaranteed to exist.
 void InstallWheelSink();
@@ -12,10 +16,10 @@ void InstallWheelSink();
 // frame even while nothing is listening - the count is simply dropped.
 std::int32_t ConsumeScrollSteps() noexcept;
 
-// Gamepad counterpart of ConsumeScrollSteps() above, for LB/RB - continuous
-// held state (+1 = RB/zoom-in, -1 = LB/zoom-out, 0 = neither/both) rather
-// than discrete steps, since holding is the natural gamepad gesture.
-std::int32_t GetGamepadScrollDirection() noexcept;
+// Gamepad counterpart of ConsumeScrollSteps() above, for
+// Config::LiveZoomBoostButton - true while held. Releasing it is handled
+// by the caller, not this function.
+bool IsGamepadZoomBoostDown() noexcept;
 
 // Tells the wheel sink whether scroll-to-adjust-zoom is currently claiming
 // the wheel, so it can neuter a claimed notch before it also reaches an
