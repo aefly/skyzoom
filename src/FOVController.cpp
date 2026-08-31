@@ -19,6 +19,12 @@ namespace FOVController {
 namespace {
 bool g_active = false;
 bool g_hotkeyWasDown = false;
+// Raw physical press edge for Config::ToggleMode - g_hotkeyWasDown above
+// tracks the post-toggle effective state instead.
+bool g_rawHotkeyWasDown = false;
+// Flips on each raw press while ToggleMode is on; reset to false when it's
+// off, so switching modes mid-session can't leave a stale "on" state.
+bool g_toggleActive = false;
 float g_baseFOVDeg = 90.0f;
 float g_fromFOVDeg = 90.0f;
 float g_toFOVDeg = 90.0f;
@@ -29,13 +35,21 @@ float g_transitionT = 1.0f;
 float g_baseSensitivity = 0.0f;
 float g_baseGamepadSensitivity = 0.0f;
 
-// Config::ZoomFOV as adjusted by the mouse wheel or gamepad LB/RB this
-// hold, within [MinZoomFOV, ZoomFOV] - kept separate from Config::ZoomFOV
-// so scrolling never writes back to the ini/MCM value. g_toFOVDeg chases
-// this via SmoothDamp (see Update()) rather than jumping straight to it.
+// Config::ZoomFOV as adjusted by the mouse wheel or
+// Config::LiveZoomBoostButton this hold, within [MinZoomFOV, ZoomFOV] -
+// kept separate from Config::ZoomFOV so scrolling never writes back to
+// the ini/MCM value. g_toFOVDeg chases this via SmoothDamp (see Update())
+// rather than jumping straight to it.
 float g_scrollZoomFOV = 60.0f;
 // SmoothDamp's persisted velocity state for the chase above.
 float g_scrollFOVVelocity = 0.0f;
+// Edge-detects the boost button's release, so letting go starts ramping
+// g_scrollZoomFOV back to ZoomFOV (unlike the wheel, which persists).
+bool g_gamepadZoomBoostWasDown = false;
+// True from release until g_scrollZoomFOV finishes ramping back to
+// ZoomFOV at the same rate as zooming in (an instant jump would let
+// SmoothDamp close it much faster than the hold-in ramp).
+bool g_gamepadBoostReleaseRamping = false;
 
 // Same from/to/t transition as above, in 0..1 instead of degrees - for
 // GetActiveZoomWeight() below, so a compat patch can blend rather than
@@ -202,8 +216,9 @@ void Update() {
 
   // Drained every frame regardless of zoom state, so wheel scrolls made
   // while not zooming never carry over as a jump next time the hotkey is
-  // pressed. Gamepad LB/RB use Input::GetGamepadScrollDirection() instead
-  // (continuous held state, not discrete notches).
+  // pressed. The gamepad boost button uses
+  // Input::IsGamepadZoomBoostDown() instead (continuous held state, not
+  // discrete notches).
   const std::int32_t scrollSteps = Input::ConsumeScrollSteps();
 
   auto *playerCamera = RE::PlayerCamera::GetSingleton();
@@ -246,8 +261,27 @@ void Update() {
                                 Config::RequireWeaponSheathed.load() &&
                                 actorState && actorState->IsWeaponDrawn();
 
+  // Ungated by weapon/dialogue blocking, so a toggle press still registers
+  // while blocked. Frozen entirely while a menu is up or unfocused, so a
+  // same-button menu press or holding through an alt-tab can't misread
+  // as a fresh edge.
+  const bool rawHotkeyDown = Input::IsHotkeyDown();
+  if (Config::ToggleMode.load()) {
+    if (!menuOpen && Input::IsGameWindowFocused()) {
+      if (rawHotkeyDown && !g_rawHotkeyWasDown) {
+        g_toggleActive = !g_toggleActive;
+      }
+      g_rawHotkeyWasDown = rawHotkeyDown;
+    }
+  } else {
+    g_toggleActive = false;
+    g_rawHotkeyWasDown = rawHotkeyDown;
+  }
+
+  const bool effectiveHotkeyDown =
+      Config::ToggleMode.load() ? g_toggleActive : rawHotkeyDown;
   const bool hotkeyDown =
-      !weaponBlocksZoom && !dialogueBlocksZoom && Input::IsHotkeyDown();
+      !weaponBlocksZoom && !dialogueBlocksZoom && effectiveHotkeyDown;
   auto *sensSetting = GetMouseSensitivitySetting();
   auto *gamepadSensSetting = GetGamepadSensitivitySetting();
 
@@ -302,6 +336,8 @@ void Update() {
     if (hotkeyDown) {
       g_scrollZoomFOV = Config::ZoomFOV.load();
       g_scrollFOVVelocity = 0.0f;
+      g_gamepadZoomBoostWasDown = false;
+      g_gamepadBoostReleaseRamping = false;
       SuppressWheelControls();
     } else {
       RestoreWheelControls();
@@ -328,14 +364,12 @@ void Update() {
       std::clamp(3.0f / Config::SmoothSpeed.load(), 0.05f, 5.0f);
 
   // g_scrollZoomFOV is the scroll-adjusted target within [MinZoomFOV,
-  // ZoomFOV] - ZoomFOV is the loose end, so scrolling out can never fully
-  // cancel the zoom; only releasing the hotkey does. The wheel moves it in
-  // instant kScrollStepDeg jumps per notch; the gamepad ramps it
-  // continuously while held. g_toFOVDeg then eases toward it via
-  // SmoothDamp, not the outer press/release transition - that one's
-  // fixed-duration ease is sized for the whole press-to-ZoomFOV sweep and
-  // would either snap or need restart-avoidance logic for small,
-  // fast-repeating notches.
+  // ZoomFOV] - only releasing the hotkey fully cancels the zoom. The wheel
+  // moves it in instant kScrollStepDeg jumps that persist; the gamepad
+  // boost button ramps it toward MinZoomFOV while held and back at the
+  // same rate on release. g_toFOVDeg chases whichever target via
+  // SmoothDamp rather than the outer press/release transition, which is
+  // sized for the whole zoom-in sweep, not small, fast-repeating notches.
   if (scrollZoomActive) {
     constexpr float kScrollStepDeg = 5.0f;
     constexpr float kGamepadScrollDegPerSec = 60.0f;
@@ -349,13 +383,22 @@ void Update() {
           minFOV, maxFOV);
     }
 
-    const std::int32_t gamepadDir = Input::GetGamepadScrollDirection();
-    if (gamepadDir != 0) {
-      g_scrollZoomFOV =
-          std::clamp(g_scrollZoomFOV - static_cast<float>(gamepadDir) *
-                                           kGamepadScrollDegPerSec * dt,
-                     minFOV, maxFOV);
+    const bool gamepadZoomBoostDown = Input::IsGamepadZoomBoostDown();
+    if (gamepadZoomBoostDown) {
+      g_scrollZoomFOV = std::clamp(
+          g_scrollZoomFOV - kGamepadScrollDegPerSec * dt, minFOV, maxFOV);
+      g_gamepadBoostReleaseRamping = false;
+    } else if (g_gamepadZoomBoostWasDown) {
+      g_gamepadBoostReleaseRamping = true; // just released
     }
+    if (g_gamepadBoostReleaseRamping) {
+      g_scrollZoomFOV = std::clamp(
+          g_scrollZoomFOV + kGamepadScrollDegPerSec * dt, minFOV, maxFOV);
+      if (g_scrollZoomFOV >= maxFOV) {
+        g_gamepadBoostReleaseRamping = false;
+      }
+    }
+    g_gamepadZoomBoostWasDown = gamepadZoomBoostDown;
 
     const float smoothTime =
         Config::ScrollUsesSmoothSpeed.load() ? duration : kScrollSmoothTime;
