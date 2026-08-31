@@ -74,13 +74,8 @@ std::int16_t GetAsyncKeyState(std::int32_t a_key) noexcept {
   return ::W32_IMPL_GetAsyncKeyState(a_key);
 }
 
-bool IsGameWindowFocused() noexcept {
-  auto *renderer = RE::BSGraphics::Renderer::GetSingleton();
-  if (!renderer) {
-    return true; // renderer not up yet; nothing to compare against
-  }
-  const auto gameHwnd = renderer->GetRuntimeData().renderWindows[0].hWnd;
-  return gameHwnd != nullptr && ::W32_IMPL_GetForegroundWindow() == gameHwnd;
+bool IsTriggerPastThreshold(std::uint8_t a_value) noexcept {
+  return a_value > REX::W32::XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
 }
 
 bool IsGamepadButtonDown(std::uint32_t a_buttonMask) noexcept {
@@ -88,14 +83,29 @@ bool IsGamepadButtonDown(std::uint32_t a_buttonMask) noexcept {
     return false;
   }
 
+  // LT/RT aren't real button bits (see Config::kSyntheticLeftTrigger) -
+  // strip them before the bitmask check and test the trigger bytes instead.
+  const auto realButtonMask =
+      a_buttonMask &
+      ~(Config::kSyntheticLeftTrigger | Config::kSyntheticRightTrigger);
+
   for (std::uint32_t user = 0; user < 4; ++user) {
     REX::W32::XINPUT_STATE state{};
     if (XInputGetState(user, &state) != 0) {
       continue;
     }
 
+    if ((a_buttonMask & Config::kSyntheticLeftTrigger) != 0 &&
+        IsTriggerPastThreshold(state.gamepad.leftTrigger)) {
+      return true;
+    }
+    if ((a_buttonMask & Config::kSyntheticRightTrigger) != 0 &&
+        IsTriggerPastThreshold(state.gamepad.rightTrigger)) {
+      return true;
+    }
+
     auto downBits =
-        static_cast<std::uint32_t>(state.gamepad.buttons) & a_buttonMask;
+        static_cast<std::uint32_t>(state.gamepad.buttons) & realButtonMask;
     constexpr auto kLeftThumb =
         static_cast<std::uint32_t>(REX::W32::XINPUT_GAMEPAD_LEFT_THUMB);
 
@@ -122,6 +132,15 @@ bool IsGamepadButtonDown(std::uint32_t a_buttonMask) noexcept {
 
 } // namespace
 
+bool IsGameWindowFocused() noexcept {
+  auto *renderer = RE::BSGraphics::Renderer::GetSingleton();
+  if (!renderer) {
+    return true; // renderer not up yet; nothing to compare against
+  }
+  const auto gameHwnd = renderer->GetRuntimeData().renderWindows[0].hWnd;
+  return gameHwnd != nullptr && ::W32_IMPL_GetForegroundWindow() == gameHwnd;
+}
+
 bool IsHotkeyDown() noexcept {
   if (!IsGameWindowFocused()) {
     return false;
@@ -135,19 +154,21 @@ bool IsHotkeyDown() noexcept {
   return IsGamepadButtonDown(Config::GamepadButton.load());
 }
 
-// LB/RB are the gamepad equivalent of scroll-to-adjust-zoom (D-Pad was the
-// first choice but conflicts with Skyrim's own favorites quick-swap).
-std::int32_t GetGamepadScrollDirection() noexcept {
-  // Excludes whichever button is the zoom hotkey itself (a valid MCM
-  // remap) - otherwise holding the hotkey would also continuously ramp
-  // the FOV, with no way to just hold at ZoomFOV.
-  const auto hotkeyMask = Config::GamepadButton.load();
-  const bool leftIsHotkey =
-      (hotkeyMask &
-       static_cast<std::uint32_t>(REX::W32::XINPUT_GAMEPAD_LEFT_SHOULDER)) != 0;
-  const bool rightIsHotkey =
-      (hotkeyMask & static_cast<std::uint32_t>(
-                        REX::W32::XINPUT_GAMEPAD_RIGHT_SHOULDER)) != 0;
+// D-Pad was tried first but conflicts with the favorites quick-swap; LB/RB
+// were ruled out as the default since both charge-and-release (Shout,
+// transform powers) and can misfire on release if used here.
+bool IsGamepadZoomBoostDown() noexcept {
+  const auto boostMask = Config::LiveZoomBoostButton.load();
+  if (boostMask == 0) {
+    return false;
+  }
+
+  // Excludes the boost button when it's also bound as the zoom hotkey
+  // itself (a valid MCM remap) - otherwise holding the hotkey would also
+  // continuously ramp the FOV, with no way to just hold at ZoomFOV.
+  if ((Config::GamepadButton.load() & boostMask) != 0) {
+    return false;
+  }
 
   for (std::uint32_t user = 0; user < 4; ++user) {
     REX::W32::XINPUT_STATE state{};
@@ -155,25 +176,26 @@ std::int32_t GetGamepadScrollDirection() noexcept {
       continue;
     }
 
-    const auto buttons = static_cast<std::uint32_t>(state.gamepad.buttons);
-    const bool leftDown =
-        !leftIsHotkey &&
-        (buttons & static_cast<std::uint32_t>(
-                       REX::W32::XINPUT_GAMEPAD_LEFT_SHOULDER)) != 0;
-    const bool rightDown =
-        !rightIsHotkey &&
-        (buttons & static_cast<std::uint32_t>(
-                       REX::W32::XINPUT_GAMEPAD_RIGHT_SHOULDER)) != 0;
-
-    if (rightDown && !leftDown) {
-      return 1; // zoom in
+    if (boostMask == Config::kSyntheticLeftTrigger) {
+      if (IsTriggerPastThreshold(state.gamepad.leftTrigger)) {
+        return true;
+      }
+      continue;
     }
-    if (leftDown && !rightDown) {
-      return -1; // zoom out
+    if (boostMask == Config::kSyntheticRightTrigger) {
+      if (IsTriggerPastThreshold(state.gamepad.rightTrigger)) {
+        return true;
+      }
+      continue;
+    }
+
+    const auto buttons = static_cast<std::uint32_t>(state.gamepad.buttons);
+    if ((buttons & boostMask) != 0) {
+      return true;
     }
   }
 
-  return 0;
+  return false;
 }
 
 void InstallWheelSink() {
