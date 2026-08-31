@@ -8,6 +8,11 @@ Function SetHotkey(int akeyCode) Global Native
 int Function GetGamepadButton() Global Native
 Function SetGamepadButton(int akeyCode) Global Native
 
+; Default hotkey/gamepad button as MCM codes, for the MCM's per-option
+; "reset to default" gesture.
+int Function GetDefaultHotkey() Global Native
+int Function GetDefaultGamepadButton() Global Native
+
 ; Rejects a keycode from the wrong device (e.g. keyboard while mapping the
 ; gamepad option), since AddKeyMapOption's capture accepts any device.
 bool Function IsKeyboardOrMouseKeycode(int akeyCode) Global Native
@@ -18,6 +23,15 @@ Function SetZoomFOV(float afov) Global Native
 
 float Function GetSmoothSpeed() Global Native
 Function SetSmoothSpeed(float aspeed) Global Native
+
+bool Function GetEnableScrollZoomAdjust() Global Native
+Function SetEnableScrollZoomAdjust(bool aenable) Global Native
+
+float Function GetMinZoomFOV() Global Native
+Function SetMinZoomFOV(float afov) Global Native
+
+bool Function GetScrollUsesSmoothSpeed() Global Native
+Function SetScrollUsesSmoothSpeed(bool ause) Global Native
 
 ; 0 = first person only, 1 = third person only, 2 = both.
 int Function GetViewMode() Global Native
