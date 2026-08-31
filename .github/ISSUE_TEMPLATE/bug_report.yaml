@@ -9,8 +9,8 @@ body:
           required: true
     - type: textarea
       attributes:
-          label: Game + Mod Version
-          placeholder: Skyrim 1.6.1170.0, SkyZoom 1.0
+          label: Skyrim + Plugin version
+          placeholder: Skyrim 1.7.104.0, SkyZoom 1.3
       validations:
           required: true
     - type: textarea
