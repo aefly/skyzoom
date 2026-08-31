@@ -10,13 +10,27 @@ inline std::atomic<std::uint32_t> Hotkey =
     0x05; // VK_XBUTTON1 (Mouse Button 4 / M4)
 inline std::atomic<std::uint32_t> GamepadButton =
     0x0004; // XINPUT_GAMEPAD_DPAD_LEFT
+
+// LT/RT are analog triggers, not real XINPUT_GAMEPAD::buttons bits - SKSE's
+// GamepadKeycodeToMask() returns a bogus value for them, so these two bits
+// (outside XInput's real 0-15 button range) stand in instead; Input.cpp
+// checks the analog trigger value for them.
+inline constexpr std::uint32_t kSyntheticLeftTrigger = 0x0001'0000;
+inline constexpr std::uint32_t kSyntheticRightTrigger = 0x0002'0000;
+
+// Toggles zoom on/off on press instead of requiring the hotkey held.
+// Default: off (hold-to-zoom).
+inline std::atomic<bool> ToggleMode = false;
+
 inline std::atomic<float> ZoomFOV = 60.0f;
 inline std::atomic<float> SmoothSpeed = 8.0f;
 
-// Whether scrolling the mouse wheel (or gamepad LB/RB) while the
-// hotkey is held adjusts the zoom live, between MinZoomFOV and ZoomFOV
-// (ZoomFOV acts as the loose-end ceiling - releasing the hotkey is still
-// the only way back to the unzoomed FOV). Default: on.
+// Whether scrolling the mouse wheel (or holding LiveZoomBoostButton below)
+// while the hotkey is held adjusts the zoom live, between MinZoomFOV and
+// ZoomFOV (ZoomFOV acts as the loose-end ceiling - releasing the hotkey is
+// still the only way back to the unzoomed FOV; releasing the boost button
+// alone also snaps back to ZoomFOV, unlike the wheel, which persists).
+// Default: on.
 inline std::atomic<bool> EnableScrollZoomAdjust = true;
 // Tightest FOV reachable by scrolling in while EnableScrollZoomAdjust is on.
 // Clamped to ZoomFOV at use time, so a misconfigured value above it can't
@@ -26,6 +40,10 @@ inline std::atomic<float> MinZoomFOV = 20.0f;
 // own fixed, faster timing. Off by default - a scroll notch is a much
 // smaller hop than the full press-in sweep SmoothSpeed is tuned for.
 inline std::atomic<bool> ScrollUsesSmoothSpeed = false;
+// XInput gamepad button for the live zoom boost (0 = disabled). Default
+// R3, not LB/RB - those charge-and-release on Shout/transform powers and
+// can misfire on release if used here instead.
+inline std::atomic<std::uint32_t> LiveZoomBoostButton = 0x0080;
 
 enum ViewMode : std::uint32_t {
   kFirstPersonOnly = 0,
