@@ -100,6 +100,18 @@ void SetGamepadButton(RE::StaticFunctionTag *, std::int32_t a_keycode) {
   Config::Save();
 }
 
+// Default hotkey/gamepad button as MCM codes, for the MCM's per-option
+// "reset to default" gesture - reuses the same conversions GetHotkey/
+// GetGamepadButton do, rather than hardcoding a separate MCM code.
+std::int32_t GetDefaultHotkey(RE::StaticFunctionTag *) {
+  return static_cast<std::int32_t>(VirtualKeyToMcmCode(0x05));
+}
+
+std::int32_t GetDefaultGamepadButton(RE::StaticFunctionTag *) {
+  return static_cast<std::int32_t>(
+      SKSE::InputMap::GamepadMaskToKeycode(0x0004));
+}
+
 float GetZoomFOV(RE::StaticFunctionTag *) { return Config::ZoomFOV.load(); }
 
 void SetZoomFOV(RE::StaticFunctionTag *, float a_fov) {
@@ -113,6 +125,33 @@ float GetSmoothSpeed(RE::StaticFunctionTag *) {
 
 void SetSmoothSpeed(RE::StaticFunctionTag *, float a_speed) {
   Config::SmoothSpeed = std::clamp(a_speed, 0.1f, 60.0f);
+  Config::Save();
+}
+
+bool GetEnableScrollZoomAdjust(RE::StaticFunctionTag *) {
+  return Config::EnableScrollZoomAdjust.load();
+}
+
+void SetEnableScrollZoomAdjust(RE::StaticFunctionTag *, bool a_enable) {
+  Config::EnableScrollZoomAdjust = a_enable;
+  Config::Save();
+}
+
+float GetMinZoomFOV(RE::StaticFunctionTag *) {
+  return Config::MinZoomFOV.load();
+}
+
+void SetMinZoomFOV(RE::StaticFunctionTag *, float a_fov) {
+  Config::MinZoomFOV = std::clamp(a_fov, 1.0f, 170.0f);
+  Config::Save();
+}
+
+bool GetScrollUsesSmoothSpeed(RE::StaticFunctionTag *) {
+  return Config::ScrollUsesSmoothSpeed.load();
+}
+
+void SetScrollUsesSmoothSpeed(RE::StaticFunctionTag *, bool a_use) {
+  Config::ScrollUsesSmoothSpeed = a_use;
   Config::Save();
 }
 
@@ -177,6 +216,9 @@ bool RegisterFunctions(RE::BSScript::IVirtualMachine *a_vm) {
   a_vm->RegisterFunction("SetHotkey", kClassName, SetHotkey);
   a_vm->RegisterFunction("GetGamepadButton", kClassName, GetGamepadButton);
   a_vm->RegisterFunction("SetGamepadButton", kClassName, SetGamepadButton);
+  a_vm->RegisterFunction("GetDefaultHotkey", kClassName, GetDefaultHotkey);
+  a_vm->RegisterFunction("GetDefaultGamepadButton", kClassName,
+                         GetDefaultGamepadButton);
   a_vm->RegisterFunction("IsKeyboardOrMouseKeycode", kClassName,
                          IsKeyboardOrMouseKeycode);
   a_vm->RegisterFunction("IsGamepadKeycode", kClassName, IsGamepadKeycode);
@@ -184,6 +226,16 @@ bool RegisterFunctions(RE::BSScript::IVirtualMachine *a_vm) {
   a_vm->RegisterFunction("SetZoomFOV", kClassName, SetZoomFOV);
   a_vm->RegisterFunction("GetSmoothSpeed", kClassName, GetSmoothSpeed);
   a_vm->RegisterFunction("SetSmoothSpeed", kClassName, SetSmoothSpeed);
+  a_vm->RegisterFunction("GetEnableScrollZoomAdjust", kClassName,
+                         GetEnableScrollZoomAdjust);
+  a_vm->RegisterFunction("SetEnableScrollZoomAdjust", kClassName,
+                         SetEnableScrollZoomAdjust);
+  a_vm->RegisterFunction("GetMinZoomFOV", kClassName, GetMinZoomFOV);
+  a_vm->RegisterFunction("SetMinZoomFOV", kClassName, SetMinZoomFOV);
+  a_vm->RegisterFunction("GetScrollUsesSmoothSpeed", kClassName,
+                         GetScrollUsesSmoothSpeed);
+  a_vm->RegisterFunction("SetScrollUsesSmoothSpeed", kClassName,
+                         SetScrollUsesSmoothSpeed);
   a_vm->RegisterFunction("GetViewMode", kClassName, GetViewMode);
   a_vm->RegisterFunction("SetViewMode", kClassName, SetViewMode);
   a_vm->RegisterFunction("GetRequireWeaponSheathed", kClassName,
