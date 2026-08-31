@@ -19,6 +19,57 @@ extern "C" std::uint32_t XInputGetState(std::uint32_t a_userIndex,
 
 namespace Input {
 namespace {
+std::atomic<std::int32_t> g_scrollSteps{0};
+std::atomic<bool> g_scrollZoomActive{false};
+
+// Mouse wheel notches arrive as RE::ButtonEvent on the kMouse device, not as
+// a pollable state - idCode 8 is wheel-up, 9 is wheel-down (see
+// SKSE::InputMap::kMacro_MouseWheelOffset, which starts right after the 8
+// raw mouse button idCodes).
+class WheelSink final : public RE::BSTEventSink<RE::InputEvent *> {
+public:
+  static WheelSink *GetSingleton() {
+    static WheelSink singleton;
+    return &singleton;
+  }
+
+  RE::BSEventNotifyControl
+  ProcessEvent(RE::InputEvent *const *a_event,
+               RE::BSTEventSource<RE::InputEvent *> *) override {
+    if (!a_event) {
+      return RE::BSEventNotifyControl::kContinue;
+    }
+
+    const bool claimWheel = g_scrollZoomActive.load(std::memory_order_relaxed);
+
+    for (auto *event = *a_event; event; event = event->next) {
+      auto *button = event->AsButtonEvent();
+      if (!button || event->GetDevice() != RE::INPUT_DEVICE::kMouse ||
+          !button->IsDown()) {
+        continue;
+      }
+
+      const auto idCode = button->GetIDCode();
+      if (idCode == 8) {
+        g_scrollSteps.fetch_add(1, std::memory_order_relaxed);
+      } else if (idCode == 9) {
+        g_scrollSteps.fetch_sub(1, std::memory_order_relaxed);
+      } else {
+        continue;
+      }
+
+      if (claimWheel) {
+        // Neuters the notch so an open menu's list (not gated by
+        // ControlMap's UEFlags) doesn't also scroll from it. Relies on
+        // PrependEventSink below to run before MenuControls sees it.
+        button->GetRuntimeData().value = 0.0f;
+      }
+    }
+
+    return RE::BSEventNotifyControl::kContinue;
+  }
+};
+
 std::int16_t GetAsyncKeyState(std::int32_t a_key) noexcept {
   return ::W32_IMPL_GetAsyncKeyState(a_key);
 }
@@ -68,6 +119,7 @@ bool IsGamepadButtonDown(std::uint32_t a_buttonMask) noexcept {
 
   return false;
 }
+
 } // namespace
 
 bool IsHotkeyDown() noexcept {
@@ -81,5 +133,63 @@ bool IsHotkeyDown() noexcept {
   }
 
   return IsGamepadButtonDown(Config::GamepadButton.load());
+}
+
+// LB/RB are the gamepad equivalent of scroll-to-adjust-zoom (D-Pad was the
+// first choice but conflicts with Skyrim's own favorites quick-swap).
+std::int32_t GetGamepadScrollDirection() noexcept {
+  // Excludes whichever button is the zoom hotkey itself (a valid MCM
+  // remap) - otherwise holding the hotkey would also continuously ramp
+  // the FOV, with no way to just hold at ZoomFOV.
+  const auto hotkeyMask = Config::GamepadButton.load();
+  const bool leftIsHotkey =
+      (hotkeyMask &
+       static_cast<std::uint32_t>(REX::W32::XINPUT_GAMEPAD_LEFT_SHOULDER)) != 0;
+  const bool rightIsHotkey =
+      (hotkeyMask & static_cast<std::uint32_t>(
+                        REX::W32::XINPUT_GAMEPAD_RIGHT_SHOULDER)) != 0;
+
+  for (std::uint32_t user = 0; user < 4; ++user) {
+    REX::W32::XINPUT_STATE state{};
+    if (XInputGetState(user, &state) != 0) {
+      continue;
+    }
+
+    const auto buttons = static_cast<std::uint32_t>(state.gamepad.buttons);
+    const bool leftDown =
+        !leftIsHotkey &&
+        (buttons & static_cast<std::uint32_t>(
+                       REX::W32::XINPUT_GAMEPAD_LEFT_SHOULDER)) != 0;
+    const bool rightDown =
+        !rightIsHotkey &&
+        (buttons & static_cast<std::uint32_t>(
+                       REX::W32::XINPUT_GAMEPAD_RIGHT_SHOULDER)) != 0;
+
+    if (rightDown && !leftDown) {
+      return 1; // zoom in
+    }
+    if (leftDown && !rightDown) {
+      return -1; // zoom out
+    }
+  }
+
+  return 0;
+}
+
+void InstallWheelSink() {
+  if (auto *manager = RE::BSInputDeviceManager::GetSingleton()) {
+    // Prepended, not appended - WheelSink::ProcessEvent must run before
+    // MenuControls/PlayerControls (already-registered sinks by this point)
+    // so it can neuter a claimed notch before they react to it.
+    manager->PrependEventSink(WheelSink::GetSingleton());
+  }
+}
+
+std::int32_t ConsumeScrollSteps() noexcept {
+  return g_scrollSteps.exchange(0, std::memory_order_relaxed);
+}
+
+void SetScrollZoomActive(bool a_active) noexcept {
+  g_scrollZoomActive.store(a_active, std::memory_order_relaxed);
 }
 } // namespace Input
