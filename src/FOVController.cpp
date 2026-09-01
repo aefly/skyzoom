@@ -51,11 +51,16 @@ bool g_gamepadZoomBoostWasDown = false;
 // SmoothDamp close it much faster than the hold-in ramp).
 bool g_gamepadBoostReleaseRamping = false;
 
-// Same from/to/t transition as above, in 0..1 instead of degrees - for
-// GetActiveZoomWeight() below, so a compat patch can blend rather than
-// substitute (see FOVController.h).
-float g_fromWeight = 0.0f;
-float g_toWeight = 0.0f;
+// Drives GetActiveZoomWeight() below (see FOVController.h). Ramps 0->1 on
+// engagement, stays at 1 through hold/release/scroll, only resets at full
+// deactivation - a host mod's a_fov isn't fed back from our last output,
+// so anything short of weight 1 never converges. Fades 1->0 during
+// g_fadingOut instead of an instant cutoff, so a host mod's own FOV effects,
+// suppressed all hold, ease back in instead of popping.
+float g_weightRampT = 0.0f;
+// True once the outer FOV transition has finished on release and only the
+// exported weight is still fading out - see g_weightRampT.
+bool g_fadingOut = false;
 
 // Atomic: read cross-DLL by a compat patch's own hook (CompatAPI.cpp).
 std::atomic<bool> g_exportedActive{false};
@@ -303,6 +308,8 @@ void Update() {
     }
     g_active = false;
     g_hotkeyWasDown = false;
+    g_weightRampT = 0.0f;
+    g_fadingOut = false;
     g_exportedActive.store(false, std::memory_order_relaxed);
     RestoreWheelControls();
     Input::SetScrollZoomActive(false);
@@ -345,11 +352,11 @@ void Update() {
     g_toFOVDeg = hotkeyDown ? g_scrollZoomFOV : g_baseFOVDeg;
     g_toFirstPersonFOVDeg =
         hotkeyDown ? g_scrollZoomFOV : g_baseFirstPersonFOVDeg;
-    g_fromWeight =
-        g_active ? (g_fromWeight + (g_toWeight - g_fromWeight) * t) : 0.0f;
-    g_toWeight = hotkeyDown ? 1.0f : 0.0f;
     g_transitionT = 0.0f;
     g_active = true;
+    // A re-press during the post-release weight fade-out (g_fadingOut)
+    // should resume ramping the weight back up, not keep fading it out.
+    g_fadingOut = false;
     g_hotkeyWasDown = hotkeyDown;
   }
 
@@ -415,11 +422,18 @@ void Update() {
       g_fromFirstPersonFOVDeg +
       (g_toFirstPersonFOVDeg - g_fromFirstPersonFOVDeg) * t;
 
-  const float weight = g_fromWeight + (g_toWeight - g_fromWeight) * t;
+  // Advances at the same pace as the outer transition but never resets on
+  // a press/release flip (see g_weightRampT's declaration) - only clamped
+  // here, not reset, so re-pressing mid-release just keeps climbing toward
+  // 1 instead of restarting the ramp. Reverses once g_fadingOut - see the
+  // completion check below.
+  g_weightRampT = std::clamp(
+      g_weightRampT + (g_fadingOut ? -dt : dt) / duration, 0.0f, 1.0f);
+  const float weight = SmoothStep(g_weightRampT);
   g_exportedWeight.store(weight, std::memory_order_relaxed);
-  // g_toFOVDeg, not Config::ZoomFOV - a compat patch blending toward this
-  // should track the scroll-adjusted target, not the static ini ceiling.
-  g_exportedTargetFOV.store(g_toFOVDeg, std::memory_order_relaxed);
+  // The live eased FOV, not g_toFOVDeg - rides our own from/to/t curve
+  // exactly (in either direction) instead of jumping to the endpoint.
+  g_exportedTargetFOV.store(playerCamera->worldFOV, std::memory_order_relaxed);
   g_exportedActive.store(true, std::memory_order_relaxed);
 
   // Scales mouse and gamepad sensitivity by the FOV ratio (raised to
@@ -451,8 +465,15 @@ void Update() {
     if (gamepadSensSetting) {
       gamepadSensSetting->SetFloat(g_baseGamepadSensitivity);
     }
-    g_active = false;
-    g_exportedActive.store(false, std::memory_order_relaxed);
+    // The FOV transition itself is done, but a compat patch's blend weight
+    // (g_weightRampT, above) keeps fading out on its own for a bit longer
+    // before we fully deactivate - see its declaration.
+    g_fadingOut = true;
+    if (g_weightRampT <= 0.0f) {
+      g_active = false;
+      g_fadingOut = false;
+      g_exportedActive.store(false, std::memory_order_relaxed);
+    }
   }
 }
 
