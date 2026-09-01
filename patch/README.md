@@ -6,20 +6,20 @@ None of them are required for SkyZoom itself to work. What form a patch
 takes (an SKSE plugin DLL, an ESP tweak, an ini, ...) depends entirely on
 what the targeted mod needs; nothing here assumes DLL.
 
-Each patch lives on its own branch (`patch/<name>`), versioned
-independently of SkyZoom and of each other - see each patch's own README
-for what it does, why it exists, and how to build/install it.
+Each patch lives in its own `patch/<name>/` directory here on `main`,
+versioned independently of SkyZoom and of each other via its own xmake
+target (`set_default(false)`, so a plain `xmake build` never builds it) -
+see each patch's own README for what it does, why it exists, and how to
+build/install it.
 
 ## Patches
 
-| Patch                                         | Targets                                   | Branch                     |
-| --------------------------------------------- | ----------------------------------------- | -------------------------- |
-| [Improved Camera SE][improved-camera-readme]  | [Improved Camera SE][improved-camera-se]  | `patch/improved-camera`    |
-| [FirstPersonFOVSKSE][first-person-fov-readme] | [FirstPersonFOVSKSE][first-person-fov-se] | `patch/FirstPersonFOVSKSE` |
+| Patch                                         | Targets                                   | Build                           |
+| --------------------------------------------- | ----------------------------------------- | ------------------------------- |
+| [Improved Camera SE][improved-camera-readme]  | [Improved Camera SE][improved-camera-se]  | `xmake build SkyZoomICPatch`    |
+| [FirstPersonFOVSKSE][first-person-fov-readme] | [FirstPersonFOVSKSE][first-person-fov-se] | `xmake build SkyZoomFPFOVPatch` |
 
-Each README link above points at that patch's own branch.
-
-[improved-camera-readme]: https://github.com/aefly/skyzoom/blob/patch/improved-camera/patch/improved-camera/README.md
+[improved-camera-readme]: improved-camera/README.md
 [improved-camera-se]: https://www.nexusmods.com/skyrimspecialedition/mods/93962
-[first-person-fov-readme]: https://github.com/aefly/skyzoom/blob/patch/FirstPersonFOVSKSE/patch/first-person-fov/README.md
+[first-person-fov-readme]: first-person-fov/README.md
 [first-person-fov-se]: https://www.nexusmods.com/skyrimspecialedition/mods/172417
