@@ -1,6 +1,7 @@
 #include "Input.h"
 
 #include "Config.h"
+#include "FOVController.h"
 
 #include "REX/W32/BASE.h"
 #include "REX/W32/XINPUT.h"
@@ -78,6 +79,88 @@ bool IsTriggerPastThreshold(std::uint8_t a_value) noexcept {
   return a_value > REX::W32::XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
 }
 
+bool IsWeaponSheathed() noexcept {
+  auto *player = RE::PlayerCharacter::GetSingleton();
+  auto *actorState = player ? player->AsActorState() : nullptr;
+  return actorState && !actorState->IsWeaponDrawn();
+}
+
+// Analog-trigger ButtonEvent idCodes aren't in SKSE::InputMap's unified
+// keymap range (see Config::kSyntheticLeftTrigger) - the game itself uses
+// these two fixed values regardless of runtime (RE::BSWin32GamepadDevice::
+// Keys::kLeftTrigger/kRightTrigger).
+constexpr std::uint32_t kLeftTriggerIDCode = 9;
+constexpr std::uint32_t kRightTriggerIDCode = 10;
+
+// Neuters LT/RT's own ButtonEvent while it's repurposed as the zoom hotkey
+// and the weapon is sheathed, so vanilla's left/right attack-block doesn't
+// also fire from the same press - drawing a weapon stops the neutering
+// immediately, restoring normal trigger function. Mirrors WheelSink's
+// value-zeroing approach above; SkyZoom's own hotkey read
+// (IsGamepadButtonDown) polls XInputGetState directly and is unaffected.
+// Skipped entirely while a menu is open (FOVController::IsMenuOpen) - the
+// weapon is sheathed nearly any time a menu is up, and several vanilla
+// menus (Inventory/Barter/Container) use the same trigger to show an item
+// comparison tooltip, which this would otherwise silently swallow.
+class TriggerSink final : public RE::BSTEventSink<RE::InputEvent *> {
+public:
+  static TriggerSink *GetSingleton() {
+    static TriggerSink singleton;
+    return &singleton;
+  }
+
+  RE::BSEventNotifyControl
+  ProcessEvent(RE::InputEvent *const *a_event,
+               RE::BSTEventSource<RE::InputEvent *> *) override {
+    if (!a_event || !Config::DisableTriggerWhenSheathed.load()) {
+      return RE::BSEventNotifyControl::kContinue;
+    }
+
+    const auto gamepadButton = Config::GamepadButton.load();
+    const bool suppressLeft =
+        (gamepadButton & Config::kSyntheticLeftTrigger) != 0;
+    const bool suppressRight =
+        (gamepadButton & Config::kSyntheticRightTrigger) != 0;
+    if (!suppressLeft && !suppressRight) {
+      return RE::BSEventNotifyControl::kContinue;
+    }
+
+    if (FOVController::IsMenuOpen()) {
+      return RE::BSEventNotifyControl::kContinue;
+    }
+
+    bool checkedSheathed = false;
+    bool sheathed = false;
+
+    for (auto *event = *a_event; event; event = event->next) {
+      auto *button = event->AsButtonEvent();
+      if (!button || event->GetDevice() != RE::INPUT_DEVICE::kGamepad) {
+        continue;
+      }
+
+      const auto idCode = button->GetIDCode();
+      const bool isTargetTrigger =
+          (suppressLeft && idCode == kLeftTriggerIDCode) ||
+          (suppressRight && idCode == kRightTriggerIDCode);
+      if (!isTargetTrigger) {
+        continue;
+      }
+
+      // Cached across the loop, not hoisted above it - avoids querying the
+      // player singleton at all when nothing in this event batch matches.
+      if (!checkedSheathed) {
+        sheathed = IsWeaponSheathed();
+        checkedSheathed = true;
+      }
+      if (sheathed) {
+        button->GetRuntimeData().value = 0.0f;
+      }
+    }
+
+    return RE::BSEventNotifyControl::kContinue;
+  }
+};
+
 bool IsGamepadButtonDown(std::uint32_t a_buttonMask) noexcept {
   if (a_buttonMask == 0) {
     return false;
@@ -85,9 +168,8 @@ bool IsGamepadButtonDown(std::uint32_t a_buttonMask) noexcept {
 
   // LT/RT aren't real button bits (see Config::kSyntheticLeftTrigger) -
   // strip them before the bitmask check and test the trigger bytes instead.
-  const auto realButtonMask =
-      a_buttonMask &
-      ~(Config::kSyntheticLeftTrigger | Config::kSyntheticRightTrigger);
+  const auto realButtonMask = a_buttonMask & ~(Config::kSyntheticLeftTrigger |
+                                               Config::kSyntheticRightTrigger);
 
   for (std::uint32_t user = 0; user < 4; ++user) {
     REX::W32::XINPUT_STATE state{};
@@ -104,23 +186,8 @@ bool IsGamepadButtonDown(std::uint32_t a_buttonMask) noexcept {
       return true;
     }
 
-    auto downBits =
+    const auto downBits =
         static_cast<std::uint32_t>(state.gamepad.buttons) & realButtonMask;
-    constexpr auto kLeftThumb =
-        static_cast<std::uint32_t>(REX::W32::XINPUT_GAMEPAD_LEFT_THUMB);
-
-    if ((downBits & kLeftThumb) != 0) {
-      // Left Stick is also the default Sprint button, which only engages
-      // with the stick pushed - so a centered-stick click still counts as
-      // the zoom hotkey, but a pushed one doesn't (no "is sprinting" flag
-      // exists to check directly).
-      const auto lx = static_cast<float>(state.gamepad.thumbLX);
-      const auto ly = static_cast<float>(state.gamepad.thumbLY);
-      constexpr float kDeadzone = REX::W32::XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
-      if (lx * lx + ly * ly > kDeadzone * kDeadzone) {
-        downBits &= ~kLeftThumb;
-      }
-    }
 
     if (downBits != 0) {
       return true;
@@ -154,9 +221,6 @@ bool IsHotkeyDown() noexcept {
   return IsGamepadButtonDown(Config::GamepadButton.load());
 }
 
-// D-Pad was tried first but conflicts with the favorites quick-swap; LB/RB
-// were ruled out as the default since both charge-and-release (Shout,
-// transform powers) and can misfire on release if used here.
 bool IsGamepadZoomBoostDown() noexcept {
   const auto boostMask = Config::LiveZoomBoostButton.load();
   if (boostMask == 0) {
@@ -204,6 +268,14 @@ void InstallWheelSink() {
     // MenuControls/PlayerControls (already-registered sinks by this point)
     // so it can neuter a claimed notch before they react to it.
     manager->PrependEventSink(WheelSink::GetSingleton());
+  }
+}
+
+void InstallTriggerSink() {
+  if (auto *manager = RE::BSInputDeviceManager::GetSingleton()) {
+    // Prepended for the same reason as WheelSink above - must run before
+    // PlayerControls sees the trigger's ButtonEvent.
+    manager->PrependEventSink(TriggerSink::GetSingleton());
   }
 }
 
