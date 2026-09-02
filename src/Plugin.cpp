@@ -17,6 +17,7 @@ namespace {
 void OnSKSEMessage(SKSE::MessagingInterface::Message *a_message) {
   if (a_message->type == SKSE::MessagingInterface::kInputLoaded) {
     Input::InstallWheelSink();
+    Input::InstallTriggerSink();
   }
 }
 
