@@ -21,170 +21,97 @@
 
 # Overview
 
-SkyZoom is a native [SKSE][skse] plugin for Skyrim Special Edition /
-Anniversary Edition.
-
-It drives `RE::PlayerCamera::worldFOV` and `firstPersonFOV` directly — the
-same members the renderer itself reads for the scene and the first-person
-viewmodel (arms/weapon) respectively — rather than touching any
-camera/scene-graph memory. See [How it works](#how-it-works) below.
+SkyZoom is a native [SKSE][skse] plugin for Skyrim SE/AE. It drives
+`worldFOV` and `firstPersonFOV` directly, rather than touching the
+camera/scene-graph.
 
 ## Features
 
-- **Smooth ease in/out** — a smoothstep transition (zero velocity at both
-  ends) instead of an abrupt cut, so the zoom never jolts when the hotkey is
-  pressed, released, or tapped quickly mid-transition.
-- **Keyboard/mouse hotkey** — any virtual-key code, configurable.
-- **Gamepad support** — any XInput button bitmask also triggers the zoom
-  (default: D-Pad Left), independently of the keyboard/mouse hotkey.
-- **Toggle mode** — optionally, press the hotkey once to zoom in and again
-  to zoom out, instead of holding it down. Off by default (hold-to-zoom).
-- **Config-driven** — target FOV and transition speed are both adjustable
-  without recompiling.
-- **Per-view toggle** — zoom in first person only, third person only, or
-  both.
-- **Live Zoom Adjust** — while holding the zoom hotkey, scroll the mouse
-  wheel or hold a dedicated, rebindable gamepad button (default: Right
-  Stick Click / R3) for an extra zoom boost on top of your base zoom.
-- **Sensitivity compensation** — optionally scales mouse and gamepad look
-  sensitivity down while zoomed, so aim doesn't get twitchy at a narrower
-  FOV.
-- **MCM menu** — if [SkyUI][skyui] is installed, all of the above are
-  configurable from an in-game menu (Mod Configuration Menu) instead of
-  hand-editing `SkyZoom.ini`. Changes apply immediately, no restart needed.
+- Smooth ease in/out (smoothstep, no jolt)
+- Keyboard/mouse + gamepad (XInput) hotkeys, independent of each other
+- Optional toggle mode (default: hold-to-zoom)
+- Live zoom adjust via scroll wheel or a rebindable gamepad button
+- Optional sensitivity compensation while zoomed
+- Per-view toggle (first person / third person / both)
+- Config via ini, or in-game MCM menu with [SkyUI][skyui]
 
 ## Installation
 
-1. Install [SKSE][skse] and
-   [Address Library for SKSE Plugins][address-library]. Optionally, install
-   [SkyUI][skyui] for the in-game MCM menu (SkyZoom works without it,
-   ini-only).
-2. Copy `SkyZoom.dll` and `SkyZoom.ini` into `Data\SKSE\Plugins\` (or into
-   the equivalent mod folder if using a mod manager such as Mod Organizer 2).
-   This alone is enough for ini-only configuration.
-3. For the MCM menu (needs SkyUI, see step 1): also copy `SkyZoom.esp` into
-   `Data\`, `SkyZoom_Native.pex`/`SkyZoom_MCM.pex` into `Data\Scripts\`, and
-   enable `SkyZoom.esp` in your load order.
-4. Launch the game via `skse64_loader.exe`.
+1. Install [SKSE][skse] and [Address Library][address-library]. Optionally
+   [SkyUI][skyui] for the MCM menu.
+2. Copy `SkyZoom.dll` and `SkyZoom.ini` into `Data\SKSE\Plugins\`.
+3. For the MCM menu: also copy `SkyZoom.esp` into `Data\` and
+   `Scripts/*.pex` into `Data\Scripts\`, then enable `SkyZoom.esp`.
+4. Launch via `skse64_loader.exe`.
 
 ## Usage
 
-Hold the configured hotkey (default: Mouse Button 4 / M4 on keyboard+mouse,
-D-Pad Left on an XInput gamepad) in first- or third-person view to zoom in.
-Release it to ease back to the normal FOV. With `ToggleMode` on, press the
-hotkey once to zoom in and press it again (rather than releasing) to zoom
-back out.
+Hold the hotkey (default: Mouse Button 4 / D-Pad Left) to zoom in; release
+to ease back out. With `ToggleMode` on, press again instead of releasing.
 
 ## Configuration
 
-If [SkyUI][skyui] is installed, open the **SkyZoom** page in the MCM menu
-(Options → Mod Configuration) to change any of the settings below in-game,
-applied immediately.
+With SkyUI: MCM menu → **SkyZoom**, applied instantly. Without it, edit
+`SkyZoom.ini` and restart.
 
-Otherwise, edit `SkyZoom.ini` next to the DLL (created with defaults on
-first launch if missing) and restart the game to apply changes:
-
-| Key                       | Default | Description                                                                                                                                                                                                   |
-| ------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Hotkey`                  | `5`     | Virtual-key code of the hold-to-zoom key (`5` = Mouse Button 4 / M4)                                                                                                                                          |
-| `GamepadButton`           | `4`     | XInput button bitmask that also holds-to-zoom (`4` = D-Pad Left; `0` disables)                                                                                                                                |
-| `ToggleMode`              | `0`     | Press the hotkey to toggle zoom on/off instead of holding it down (`1` = on, `0` = off, default)                                                                                                              |
-| `ZoomFOV`                 | `60.0`  | FOV in degrees while the hotkey is held                                                                                                                                                                       |
-| `SmoothSpeed`             | `8.0`   | Ease-in/ease-out speed for the zoom transition (higher = snappier)                                                                                                                                            |
-| `EnableScrollZoomAdjust`  | `1`     | Let the mouse wheel adjust the zoom live, between `MinZoomFOV` and `ZoomFOV` - or hold `LiveZoomBoostButton` below for a temporary tighter zoom that eases back to `ZoomFOV` on release (`1` = on, `0` = off) |
-| `MinZoomFOV`              | `20.0`  | Tightest FOV reachable via the wheel or `LiveZoomBoostButton`, while `EnableScrollZoomAdjust` is on                                                                                                           |
-| `ScrollUsesSmoothSpeed`   | `0`     | Scroll-zoom ease uses `SmoothSpeed`'s speed instead of its own fixed, faster timing (`1` = on, `0` = off)                                                                                                     |
-| `LiveZoomBoostButton`     | `128`   | XInput button bitmask for the live zoom boost (`128` = Right Stick Click / R3; `0` disables)                                                                                                                  |
-| `ViewMode`                | `2`     | Which view(s) the hotkey zooms in (`0` = first person only, `1` = third person only, `2` = both)                                                                                                              |
-| `RequireWeaponSheathed`   | `1`     | Only zoom while not in a ready/fighting stance, weapon or H2H (`1` = on, `0` = zoom works from any stance too)                                                                                                |
-| `AllowZoomDuringDialogue` | `0`     | Let the hotkey zoom while talking to an NPC, even from a ready stance (`1` = on, `0` = off, default)                                                                                                          |
-| `ScaleMouseSensitivity`   | `1`     | Scale mouse and gamepad look sensitivity down while zoomed (`1` = on, `0` = off)                                                                                                                              |
-| `SensitivityExponent`     | `2.5`   | How aggressively sensitivity is cut while zoomed (higher = more aggressive at moderate zoom)                                                                                                                  |
+| Key                          | Default | Description                                             |
+| ---------------------------- | ------- | ------------------------------------------------------- |
+| `Hotkey`                     | `5`     | Hold-to-zoom key (`5` = M4)                             |
+| `GamepadButton`              | `4`     | XInput hold-to-zoom button (`0` disables)               |
+| `ToggleMode`                 | `0`     | Toggle instead of hold                                  |
+| `ZoomFOV`                    | `60.0`  | FOV while zoomed                                        |
+| `SmoothSpeed`                | `8.0`   | Ease speed (higher = snappier)                          |
+| `EnableScrollZoomAdjust`     | `1`     | Live-adjust zoom via wheel/boost button                 |
+| `MinZoomFOV`                 | `20.0`  | Tightest FOV reachable while adjusting                  |
+| `ScrollUsesSmoothSpeed`      | `0`     | Use `SmoothSpeed` timing for scroll-zoom ease           |
+| `LiveZoomBoostButton`        | `128`   | Gamepad button for live zoom boost (`0` disables)       |
+| `DisableTriggerWhenSheathed` | `0`     | Free an LT/RT `GamepadButton` from block while sheathed |
+| `ViewMode`                   | `2`     | `0`=1st person, `1`=3rd person, `2`=both                |
+| `RequireWeaponSheathed`      | `1`     | Only zoom outside ready/fighting stance                 |
+| `AllowZoomDuringDialogue`    | `0`     | Allow zoom during dialogue even if readied              |
+| `ScaleMouseSensitivity`      | `1`     | Reduce look sensitivity while zoomed                    |
+| `SensitivityExponent`        | `2.5`   | Aggressiveness of sensitivity cut                       |
 
 ## Compatibility
 
-See [Compatibility](./patch/README.md) for SkyZoom's optional,
-separately-versioned compatibility patches.
+See [patch/README.md](./patch/README.md) for compatibility patches.
 
 ## Building
 
-### Requirements
-
-- [XMake 3.0.0+](https://xmake.io)
-- C++23 compiler: MSVC (Build Tools for Visual Studio, no full IDE required)
-  or Clang-CL
-
-### Dependencies
-
-`lib/commonlibsse-ng` is a git submodule, tracking
-[alandtse/CommonLibSSE-NG][commonlibsse-ng]. SkyZoom is built for the SE and
-AE. Confirmed working on 1.6.1170, 1.7.99, and 1.5.97; any other SE/AE version
-should work as long as [Address Library][address-library] has a matching file for
-it.
-
-Fetch the submodule with:
+**Requirements:** [XMake 3.0.0+](https://xmake.io), C++23 compiler (MSVC or Clang-CL)
 
 ```sh
 git submodule update --init --recursive
+xmake build SkyZoom
 ```
 
-### Build
+### MCM Menu
 
-```sh
-xmake build
-```
-
-### Building the MCM menu
-
-`dist/SkyZoom.esp` is checked into this repo (a plugin containing one Quest -
-`Start Game Enabled`, no stages/aliases - with `SkyZoom_MCM.pex` attached as
-its VMAD script; built once with a tool like SSEEdit and never needs
-rebuilding unless the script's class name changes). Only the `.pex` files
-need recompiling when `scripts/source/*.psc` changes.
+`dist/SkyZoom.esp` is prebuilt and checked in. Only `scripts/source/*.psc`
+needs recompiling on change, via `PapyrusCompiler.exe` (Creation Kit).
 
 Requirements:
 
-- `PapyrusCompiler.exe`, shipped with the Creation Kit
-  (`<Skyrim install>\Papyrus Compiler\PapyrusCompiler.exe`).
 - The base game's Papyrus source, under
   `<Skyrim install>\Data\Scripts\Source\Source\Scripts`. The Creation Kit
-  install drops this as a zip, `<Skyrim install>\Data\Scripts.zip` - it
-  does **not** extract it automatically, so unzip it yourself first (its
-  `Source\Scripts\` folder is what goes under `Source\Source\Scripts`
-  above). Without this, compiling fails on the very first script that
-  extends anything, since even `Quest` (the root of `SKI_ConfigBase`'s own
-  extends chain) needs to be resolvable from source.
-- The [SkyUI SDK][skyui-sdk] (a separate download from the SkyUI Nexus
-  page), for `SKI_ConfigBase.psc` - `SkyZoom_MCM.psc` extends it, and the
-  compiler needs the source, not SkyUI's shipped `.pex`, for anything it
-  extends.
-
-Compile both scripts with all three import paths and the base game's flags
-file, e.g. from PowerShell:
+  drops it as `<Skyrim install>\Data\Scripts.zip` without extracting it -
+  unzip it yourself, and put its `Source\Scripts\` folder at
+  `Source\Source\Scripts` above. Needed even to resolve `Quest`, the root
+  of `SKI_ConfigBase`'s own extends chain.
+- The [SkyUI SDK][skyui], for `SKI_ConfigBase.psc` source - `SkyZoom_MCM.psc`
+  extends it, and the compiler needs source, not SkyUI's shipped `.pex`.
 
 ```powershell
 $compiler = "<Skyrim install>\Papyrus Compiler\PapyrusCompiler.exe"
 $baseSource = "<Skyrim install>\Data\Scripts\Source\Source\Scripts"
-$skyuiSdk = "<SkyUI SDK>\Scripts\Source"
-$imports = "$baseSource;$skyuiSdk;scripts\source"
+$imports = "$baseSource;<SkyUI SDK>\Scripts\Source;scripts\source"
 $flags = "$baseSource\TESV_Papyrus_Flags.flg"
 
-& $compiler scripts\source\SkyZoom_Native.psc `
-  -i="$imports" -f="$flags" -o=build\papyrus_output
-& $compiler scripts\source\SkyZoom_MCM.psc `
-  -i="$imports" -f="$flags" -o=build\papyrus_output
+& $compiler scripts\source\SkyZoom_Native.psc -i="$imports" -f="$flags" -o=build\papyrus_output
+& $compiler scripts\source\SkyZoom_MCM.psc -i="$imports" -f="$flags" -o=build\papyrus_output
 ```
 
-Then ship the resulting `Scripts/*.pex` alongside the DLL and `SkyZoom.esp`.
-
-### Visual Studio project (optional)
-
-```sh
-xmake project -k vsxmake
-```
-
-generates a `vsxmakeXXXX/` solution if you'd rather build/debug from the
-Visual Studio IDE.
+Ship the resulting `Scripts/*.pex` alongside the DLL and `SkyZoom.esp`.
 
 ## Project Structure
 
@@ -209,68 +136,6 @@ Visual Studio IDE.
 └── lib/commonlibsse-ng/          CommonLibSSE-NG (git submodule)
 ```
 
-The compiled `Scripts/*.pex` aren't checked into this repo
-(`scripts/source/*.psc` is the source of truth) - see
-[Building the MCM menu](#building-the-mcm-menu) below.
-
-## How it works
-
-A background thread polls
-`RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData().renderWindows[0].swapChain`
-— an Address-Library-resolved pointer into the game's actual D3D11 swapchain
-— until it's non-null, then vtable-patches that swapchain's `Present` for a
-per-frame callback. Each frame, while the player is in first or third person
-and the hotkey (or gamepad button) is held or the transition is still easing
-out - and no blocking menu (inventory, magic, crafting, book, container,
-barter, ...) is open, and (unless `AllowZoomDuringDialogue` is on) the
-Dialogue Menu isn't open either - it's excluded from the general menu check
-and gets its own MCM toggle instead, since unlike the others it doesn't
-cover the 3D view - and (if `RequireWeaponSheathed` is on, and not
-overridden by an allowed conversation) the player isn't in a ready/fighting
-stance (weapon, spell, or empty-handed H2H all count) -
-`FOVController::Update()` writes smoothstep-interpolated values straight
-into `RE::PlayerCamera::worldFOV` and `firstPersonFOV` (the latter
-only matters in first person, but is harmless to keep in sync in third
-person too), so the scene and the first-person viewmodel (arms/weapon) zoom
-together as one picture. If `ScaleMouseSensitivity` is on, the same
-transition also scales `fMouseHeadingSensitivity:Controls` and
-`fGamePadHeadingSensitivity:Controls` (both SkyrimPrefs.ini) by
-`(currentFOV / baseFOV) ^ SensitivityExponent`, so look sensitivity doesn't
-feel twitchy at a narrower FOV regardless of which device you're aiming
-with. See the comments in `Hooks.cpp` and `FOVController.cpp` for more
-detail.
-
-With `ToggleMode` on, `Update()` edge-detects the raw hotkey press each
-frame (tracked independently of - and before - the `RequireWeaponSheathed`/
-`AllowZoomDuringDialogue` gating above, so a press still registers while
-blocked) and flips a persisted on/off flag instead of using the hotkey's
-live held state directly; that flag, not the raw press, is what feeds the
-rest of `Update()`, so the zoom stays toggled on through a temporary block
-(a menu, a drawn weapon) and resumes the moment it clears, with no second
-press needed.
-
-While the hold is active and `EnableScrollZoomAdjust` is on, a prepended
-`RE::BSInputDeviceManager` event sink counts mouse wheel notches (idCodes 8/9,
-run ahead of the menu/player control sinks so a claimed notch can be
-neutered before they see it), moving a scroll target within
-`[MinZoomFOV, ZoomFOV]` that persists until scrolled again.
-`IsGamepadZoomBoostDown()` separately polls XInput for
-`Config::LiveZoomBoostButton` (default: Right Stick Click / R3 - LB/RB are
-avoided by default, since both are vanilla charge-and-release binds like
-Shout that could misfire on release if used here instead) - and while
-that button is held, the same target instead ramps continuously toward
-`MinZoomFOV`; on release it ramps back to `ZoomFOV` at that same rate,
-rather than jumping the target there instantly, so releasing doesn't feel
-faster than holding.
-`FOVController::Update()` chases whichever target is active with a
-critically-damped SmoothDamp spring instead of the outer press/release
-transition, since the latter's fixed-duration ease is sized for the whole
-zoom-in sweep, not small, fast-repeating notches or the boost button's
-ramp. For the duration of the hold, `RE::ControlMap`'s
-`kPOVSwitch`/`kWheelZoom` flags are toggled off so the same wheel notches
-don't also fight the hold by switching POV or driving vanilla's own
-third-person camera zoom.
-
 ## License
 
 This project is under the [GNU General Public License v3.0](./LICENSE).
@@ -278,5 +143,3 @@ This project is under the [GNU General Public License v3.0](./LICENSE).
 [skse]: https://skse.silverlock.org/
 [address-library]: https://www.nexusmods.com/skyrimspecialedition/mods/32444
 [skyui]: https://www.nexusmods.com/skyrimspecialedition/mods/12604
-[skyui-sdk]: https://www.nexusmods.com/skyrimspecialedition/mods/12604?tab=files
-[commonlibsse-ng]: https://github.com/alandtse/CommonLibSSE-NG
