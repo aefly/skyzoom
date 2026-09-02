@@ -18,6 +18,12 @@ inline std::atomic<std::uint32_t> GamepadButton =
 inline constexpr std::uint32_t kSyntheticLeftTrigger = 0x0001'0000;
 inline constexpr std::uint32_t kSyntheticRightTrigger = 0x0002'0000;
 
+// When GamepadButton above is bound to LT/RT, also neuter that trigger's
+// vanilla ButtonEvent (left/right attack-block) while the weapon is
+// sheathed, freeing it up to be used purely for zoom - drawing a weapon
+// restores its normal function immediately. Default: off.
+inline std::atomic<bool> DisableTriggerWhenSheathed = false;
+
 // Toggles zoom on/off on press instead of requiring the hotkey held.
 // Default: off (hold-to-zoom).
 inline std::atomic<bool> ToggleMode = false;
@@ -40,9 +46,7 @@ inline std::atomic<float> MinZoomFOV = 20.0f;
 // own fixed, faster timing. Off by default - a scroll notch is a much
 // smaller hop than the full press-in sweep SmoothSpeed is tuned for.
 inline std::atomic<bool> ScrollUsesSmoothSpeed = false;
-// XInput gamepad button for the live zoom boost (0 = disabled). Default
-// R3, not LB/RB - those charge-and-release on Shout/transform powers and
-// can misfire on release if used here instead.
+// XInput gamepad button for the live zoom boost.
 inline std::atomic<std::uint32_t> LiveZoomBoostButton = 0x0080;
 
 enum ViewMode : std::uint32_t {
