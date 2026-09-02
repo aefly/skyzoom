@@ -112,7 +112,7 @@ void InstallNiCameraHook() {
                   reinterpret_cast<std::uintptr_t>(target));
 }
 
-// kUpdateFOVRVA was resolved from ImprovedCameraSE.dll v2.0.0.2025's PDB -
+// kUpdateFOVRVA was resolved from ImprovedCameraSE.dll PDB -
 // Improved Camera isn't on Address Library, so there's no version-
 // independent way to find it. Confirmed stable across the NexusMods and
 // Discord builds tested so far; if a future build moves it, this hook
