@@ -1,12 +1,12 @@
-# SkyZoom patches
+# SkyZoom Patches
 
-This directory holds SkyZoom's optional compatibility patches - each one
-only makes sense to install if you also have the specific mod it targets.
+This directory holds SkyZoom's optional compatibility patches, makes sense to
+install if you also have the specific mod it targets.
 None of them are required for SkyZoom itself to work. What form a patch
 takes (an SKSE plugin DLL, an ESP tweak, an ini, ...) depends entirely on
-what the targeted mod needs; nothing here assumes DLL.
+what the targeted mod needs.
 
-Each patch lives in its own `patch/<name>/` directory here on `main`,
+Each patch lives in its own `patch/<name>/` directory here,
 versioned independently of SkyZoom and of each other via its own xmake
 target (`set_default(false)`, so a plain `xmake build` never builds it) -
 see each patch's own README for what it does, why it exists, and how to
