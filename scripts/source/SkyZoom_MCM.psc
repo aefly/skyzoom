@@ -9,6 +9,7 @@ int _oidEnableScrollZoomAdjust
 int _oidMinZoomFOV
 int _oidScrollUsesSmoothSpeed
 int _oidLiveZoomBoostButton
+int _oidDisableTriggerWhenSheathed
 int _oidViewMode
 int _oidRequireWeaponSheathed
 int _oidAllowZoomDuringDialogue
@@ -38,9 +39,9 @@ Event OnPageReset(string a_page)
     _oidZoomHotkey = AddKeyMapOption("Zoom Hotkey", SkyZoom_Native.GetHotkey())
     _oidGamepadButton = AddKeyMapOption("Zoom Gamepad Button", SkyZoom_Native.GetGamepadButton())
     _oidLiveZoomBoostButton = AddKeyMapOption("Live Zoom Gamepad Button", SkyZoom_Native.GetLiveZoomBoostButton(), scrollZoomFlags)
-    _oidToggleMode = AddToggleOption("Toggle Mode", SkyZoom_Native.GetToggleMode())
 
     AddHeaderOption("Zoom")
+    _oidToggleMode = AddToggleOption("Toggle Mode", SkyZoom_Native.GetToggleMode())
     _oidZoomFOV = AddSliderOption("Zoom FOV", SkyZoom_Native.GetZoomFOV(), "{0} deg")
     _oidSmoothSpeed = AddSliderOption("Smooth Speed", SkyZoom_Native.GetSmoothSpeed(), "{2}")
 
@@ -49,11 +50,12 @@ Event OnPageReset(string a_page)
     _oidMinZoomFOV = AddSliderOption("Min Live Zoom FOV", SkyZoom_Native.GetMinZoomFOV(), "{0} deg", scrollZoomFlags)
     _oidScrollUsesSmoothSpeed = AddToggleOption("Live Zoom Uses Smooth Speed", SkyZoom_Native.GetScrollUsesSmoothSpeed(), scrollZoomFlags)
 
-    SetCursorPosition(1) ; right column: Zoom Conditions, Look Sensitivity, then About
+    SetCursorPosition(1) ; right column
 
     AddHeaderOption("Zoom Conditions")
     _oidViewMode = AddMenuOption("Active View", _viewModeOptions[SkyZoom_Native.GetViewMode()])
     _oidRequireWeaponSheathed = AddToggleOption("Require Weapon Sheathed", SkyZoom_Native.GetRequireWeaponSheathed())
+    _oidDisableTriggerWhenSheathed = AddToggleOption("Free Trigger When Sheathed", SkyZoom_Native.GetDisableTriggerWhenSheathed())
     _oidAllowZoomDuringDialogue = AddToggleOption("Allow Zoom During Dialogue", SkyZoom_Native.GetAllowZoomDuringDialogue())
 
     AddHeaderOption("Look Sensitivity")
@@ -81,6 +83,8 @@ Event OnOptionHighlight(int a_option)
         else
             SetInfoText("Gamepad button to zoom in.")
         endif
+    elseif a_option == _oidDisableTriggerWhenSheathed
+        SetInfoText("If Zoom Gamepad Button above is LT/RT, frees it from its normal left/right attack-block function while your weapon is sheathed. Drawing a weapon restores normal function immediately.")
     elseif a_option == _oidLiveZoomBoostButton
         SetInfoText("Gamepad button for Live Zoom Adjust.")
     elseif a_option == _oidToggleMode
@@ -214,6 +218,10 @@ Event OnOptionSelect(int a_option)
         bool toggleMode = !SkyZoom_Native.GetToggleMode()
         SkyZoom_Native.SetToggleMode(toggleMode)
         SetToggleOptionValue(a_option, toggleMode)
+    elseif a_option == _oidDisableTriggerWhenSheathed
+        bool disableTrigger = !SkyZoom_Native.GetDisableTriggerWhenSheathed()
+        SkyZoom_Native.SetDisableTriggerWhenSheathed(disableTrigger)
+        SetToggleOptionValue(a_option, disableTrigger)
     endif
 EndEvent
 
@@ -255,6 +263,9 @@ Event OnOptionDefault(int a_option)
     elseif a_option == _oidViewMode
         SkyZoom_Native.SetViewMode(2)
         SetMenuOptionValue(a_option, _viewModeOptions[2])
+    elseif a_option == _oidDisableTriggerWhenSheathed
+        SkyZoom_Native.SetDisableTriggerWhenSheathed(false)
+        SetToggleOptionValue(a_option, false)
     elseif a_option == _oidRequireWeaponSheathed
         SkyZoom_Native.SetRequireWeaponSheathed(true)
         SetToggleOptionValue(a_option, true)
