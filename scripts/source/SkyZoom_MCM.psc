@@ -84,7 +84,7 @@ Event OnOptionHighlight(int a_option)
             SetInfoText("Gamepad button to zoom in.")
         endif
     elseif a_option == _oidDisableTriggerWhenSheathed
-        SetInfoText("If Zoom Gamepad Button above is LT/RT, frees it from its normal left/right attack-block function while your weapon is sheathed. Drawing a weapon restores normal function immediately.")
+        SetInfoText("If Zoom Gamepad Button is LT/RT, frees it up while sheathed, drawing a weapon restores its normal function.")
     elseif a_option == _oidLiveZoomBoostButton
         SetInfoText("Gamepad button for Live Zoom Adjust.")
     elseif a_option == _oidToggleMode
