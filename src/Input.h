@@ -11,6 +11,10 @@ bool IsGameWindowFocused() noexcept;
 // fires, so RE::BSInputDeviceManager is guaranteed to exist.
 void InstallWheelSink();
 
+// Registers the gamepad trigger sink (Config::DisableTriggerWhenSheathed) -
+// same timing requirement as InstallWheelSink() above.
+void InstallTriggerSink();
+
 // Net mouse wheel notches scrolled since the last call (positive = up/in,
 // negative = down/out), then resets the count to zero. Safe to call every
 // frame even while nothing is listening - the count is simply dropped.
