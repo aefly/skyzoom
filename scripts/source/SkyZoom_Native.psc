@@ -49,6 +49,11 @@ Function SetViewMode(int aviewMode) Global Native
 bool Function GetRequireWeaponSheathed() Global Native
 Function SetRequireWeaponSheathed(bool arequire) Global Native
 
+; When GamepadButton above is LT/RT, also disables that trigger's normal
+; vanilla function (left/right attack-block) while the weapon is sheathed.
+bool Function GetDisableTriggerWhenSheathed() Global Native
+Function SetDisableTriggerWhenSheathed(bool adisable) Global Native
+
 bool Function GetAllowZoomDuringDialogue() Global Native
 Function SetAllowZoomDuringDialogue(bool aallow) Global Native
 
