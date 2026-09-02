@@ -212,6 +212,24 @@ bool IsBlockingMenuOpen(RE::UI *a_ui) noexcept {
 }
 } // namespace
 
+// Shared with Input.cpp's TriggerSink - it also needs to know when a menu
+// has taken over input, so it doesn't suppress LT/RT's vanilla function
+// (e.g. the Inventory/Barter/Container "hold to compare" prompt) just
+// because the weapon happens to be sheathed while browsing a menu. Dialogue
+// is deliberately excluded here too, matching Update()'s own menuOpen -
+// TriggerSink doesn't need a dialogue carve-out, but there's no harm in it
+// following the same definition of "blocking" as the zoom hotkey does.
+bool IsMenuOpen() noexcept {
+  auto *ui = RE::UI::GetSingleton();
+  if (!ui || ui->IsMenuOpen(RE::DialogueMenu::MENU_NAME)) {
+    return false;
+  }
+  auto *controlMap = RE::ControlMap::GetSingleton();
+  const bool controlsDisabled =
+      controlMap && !controlMap->IsMovementControlsEnabled();
+  return controlsDisabled || ui->GameIsPaused() || IsBlockingMenuOpen(ui);
+}
+
 void Update() {
   const auto now = std::chrono::steady_clock::now();
   static auto lastTime = now;
