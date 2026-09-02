@@ -226,6 +226,15 @@ void SetRequireWeaponSheathed(RE::StaticFunctionTag *, bool a_require) {
   Config::Save();
 }
 
+bool GetDisableTriggerWhenSheathed(RE::StaticFunctionTag *) {
+  return Config::DisableTriggerWhenSheathed.load();
+}
+
+void SetDisableTriggerWhenSheathed(RE::StaticFunctionTag *, bool a_disable) {
+  Config::DisableTriggerWhenSheathed = a_disable;
+  Config::Save();
+}
+
 bool GetAllowZoomDuringDialogue(RE::StaticFunctionTag *) {
   return Config::AllowZoomDuringDialogue.load();
 }
@@ -301,6 +310,10 @@ bool RegisterFunctions(RE::BSScript::IVirtualMachine *a_vm) {
                          GetRequireWeaponSheathed);
   a_vm->RegisterFunction("SetRequireWeaponSheathed", kClassName,
                          SetRequireWeaponSheathed);
+  a_vm->RegisterFunction("GetDisableTriggerWhenSheathed", kClassName,
+                         GetDisableTriggerWhenSheathed);
+  a_vm->RegisterFunction("SetDisableTriggerWhenSheathed", kClassName,
+                         SetDisableTriggerWhenSheathed);
   a_vm->RegisterFunction("GetAllowZoomDuringDialogue", kClassName,
                          GetAllowZoomDuringDialogue);
   a_vm->RegisterFunction("SetAllowZoomDuringDialogue", kClassName,
