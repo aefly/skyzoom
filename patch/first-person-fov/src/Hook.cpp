@@ -20,18 +20,10 @@ using GetActiveZoomWeight_t = bool(__cdecl *)(float *, float *);
 NiCameraUpdate_t g_original = nullptr;
 GetActiveZoomWeight_t g_getActiveZoomWeight = nullptr;
 
-// FirstPersonFOV writes RE::PlayerCamera::worldFOV/firstPersonFOV directly
-// from its own per-frame PlayerCamera::Update hook (a `call`-site patch, not
-// a detour on this address - see its FOVPatch.h), earlier in the frame than
-// SkyZoom's D3D Present hook. By the time that value reaches this function -
-// the same low-level, per-frame FOV-application call the Improved Camera SE
-// patch also hooks (address published there) - it's the last point before
-// the frame's FOV reaches the renderer, regardless of who wrote it upstream.
-// Blending toward SkyZoom's target by weight here (rather than substituting
-// outright) avoids a visible snap at the transition boundaries, same
-// reasoning as the Improved Camera SE patch. Unlike that patch, this one
-// doesn't share a hook address with FirstPersonFOV at all - we're only
-// reading the result of its write, so install order doesn't matter.
+// Last per-frame FOV-apply call before the renderer, so it sees FirstPersonFOV's write
+// regardless of order. Blend by weight, not substitute, to avoid a visible
+// snap - same reasoning as that patch. No shared hook address with
+// FirstPersonFOV though, so install order doesn't matter here.
 void __cdecl hkNiCameraUpdate(RE::NiCamera *a_camera, float a_fov, float a_near,
                               float a_far, std::uint32_t a_screenWidth,
                               std::uint32_t a_screenHeight, std::uint8_t a_unk7,
