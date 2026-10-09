@@ -34,6 +34,8 @@ float g_toFirstPersonFOVDeg = 90.0f;
 float g_transitionT = 1.0f;
 float g_baseSensitivity = 0.0f;
 float g_baseGamepadSensitivity = 0.0f;
+float g_baseMouseYScale = 0.0f;
+float g_baseGamepadYScale = 0.0f;
 
 // Config::ZoomFOV as adjusted by the mouse wheel or
 // Config::LiveZoomBoostButton this hold, within [MinZoomFOV, ZoomFOV] -
@@ -187,6 +189,37 @@ RE::Setting *GetGamepadSensitivitySetting() noexcept {
   return cached;
 }
 
+// Reads/writes "fMouseHeadingYScale:Controls" (Skyrim.ini, [Controls]), the
+// mouse pitch-only multiplier - see EnginePitchFactor() below for why.
+RE::Setting *GetMouseYScaleSetting() noexcept {
+  static RE::Setting *cached = nullptr;
+  if (!cached) {
+    cached = FindSetting("fMouseHeadingYScale:Controls");
+  }
+  return cached;
+}
+
+// Gamepad counterpart of the setting above.
+RE::Setting *GetGamepadYScaleSetting() noexcept {
+  static RE::Setting *cached = nullptr;
+  if (!cached) {
+    cached = FindSetting("fGamepadHeadingYScale:Controls");
+  }
+  return cached;
+}
+
+// In first person, the engine already scales look pitch (never yaw) by
+// min(1, FOV / 75) on its own - measured in-game, see issue #1 - so
+// narrowing the FOV slowed vertical look even with ScaleMouseSensitivity
+// off, and doubly so with it on. Dividing this back out of
+// fMouseHeadingYScale while zoomed makes pitch follow the same curve as yaw.
+// fGamepadHeadingYScale gets the same treatment for the right stick.
+constexpr float kEnginePitchRefFOVDeg = 75.0f;
+
+float EnginePitchFactor(float a_fovDeg) noexcept {
+  return std::clamp(a_fovDeg / kEnginePitchRefFOVDeg, 0.01f, 1.0f);
+}
+
 // Menus that take over input without tripping GameIsPaused() or
 // ControlMap::IsMovementControlsEnabled() (e.g. Crafting does neither).
 constexpr std::array<std::string_view, 19> kBlockingMenuNames = {
@@ -307,6 +340,8 @@ void Update() {
       !weaponBlocksZoom && !dialogueBlocksZoom && effectiveHotkeyDown;
   auto *sensSetting = GetMouseSensitivitySetting();
   auto *gamepadSensSetting = GetGamepadSensitivitySetting();
+  auto *yScaleSetting = GetMouseYScaleSetting();
+  auto *gamepadYScaleSetting = GetGamepadYScaleSetting();
 
   if (!playerCamera || !inZoomableView || menuOpen) {
     // Reset here, not just on the press/release edge below, so leaving
@@ -322,6 +357,12 @@ void Update() {
       }
       if (gamepadSensSetting) {
         gamepadSensSetting->SetFloat(g_baseGamepadSensitivity);
+      }
+      if (yScaleSetting) {
+        yScaleSetting->SetFloat(g_baseMouseYScale);
+      }
+      if (gamepadYScaleSetting) {
+        gamepadYScaleSetting->SetFloat(g_baseGamepadYScale);
       }
     }
     g_active = false;
@@ -349,6 +390,12 @@ void Update() {
       }
       if (gamepadSensSetting) {
         g_baseGamepadSensitivity = gamepadSensSetting->GetFloat();
+      }
+      if (yScaleSetting) {
+        g_baseMouseYScale = yScaleSetting->GetFloat();
+      }
+      if (gamepadYScaleSetting) {
+        g_baseGamepadYScale = gamepadYScaleSetting->GetFloat();
       }
     }
     const float t = SmoothStep(g_transitionT);
@@ -473,6 +520,22 @@ void Update() {
     }
   }
 
+  // Always on, unlike the scaling above: undoes the engine's own pitch
+  // slowdown (see EnginePitchFactor()) relative to the base FOV, so a base
+  // FOV already under the engine's reference keeps its vanilla feel. First
+  // person only - third person shows no such slowdown, so compensating there
+  // made pitch overshoot at high zoom.
+  const float pitchCompensation =
+      inFirstPerson ? EnginePitchFactor(g_baseFOVDeg) /
+                          EnginePitchFactor(playerCamera->worldFOV)
+                    : 1.0f;
+  if (yScaleSetting) {
+    yScaleSetting->SetFloat(g_baseMouseYScale * pitchCompensation);
+  }
+  if (gamepadYScaleSetting) {
+    gamepadYScaleSetting->SetFloat(g_baseGamepadYScale * pitchCompensation);
+  }
+
   if (!hotkeyDown && g_transitionT >= 1.0f) {
     // Snap to the sampled base so nothing drifts if this runs again later.
     playerCamera->worldFOV = g_baseFOVDeg;
@@ -482,6 +545,12 @@ void Update() {
     }
     if (gamepadSensSetting) {
       gamepadSensSetting->SetFloat(g_baseGamepadSensitivity);
+    }
+    if (yScaleSetting) {
+      yScaleSetting->SetFloat(g_baseMouseYScale);
+    }
+    if (gamepadYScaleSetting) {
+      gamepadYScaleSetting->SetFloat(g_baseGamepadYScale);
     }
     // The FOV transition itself is done, but a compat patch's blend weight
     // (g_weightRampT, above) keeps fading out on its own for a bit longer
